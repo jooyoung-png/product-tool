@@ -7,7 +7,7 @@ import crypto from 'crypto';
 const PROJECT_ID = 2773336;
 const CACHE_TTL = 2 * 60 * 60 * 1000; // 2시간
 
-// ─── 파일 기반 캐시 (서버 재시작 후에도 유지) ──────────────────────────────
+// ─── 파일 기반 캐시 ────────────────────────────────────────────────────────────
 const CACHE_DIR = path.join(os.tmpdir(), 'mixpanel-jql-cache');
 
 function cacheRead<T>(key: string): T | null {
@@ -15,9 +15,7 @@ function cacheRead<T>(key: string): T | null {
     const file = path.join(CACHE_DIR, crypto.createHash('md5').update(key).digest('hex') + '.json');
     const { data, expiry } = JSON.parse(fs.readFileSync(file, 'utf-8')) as { data: T; expiry: number };
     if (expiry > Date.now()) return data;
-  } catch {
-    // 파일 없음 or 만료
-  }
+  } catch { /* 파일 없음 or 만료 */ }
   return null;
 }
 
@@ -26,9 +24,7 @@ function cacheWrite(key: string, data: unknown): void {
     fs.mkdirSync(CACHE_DIR, { recursive: true });
     const file = path.join(CACHE_DIR, crypto.createHash('md5').update(key).digest('hex') + '.json');
     fs.writeFileSync(file, JSON.stringify({ data, expiry: Date.now() + CACHE_TTL }));
-  } catch {
-    // 캐시 쓰기 실패는 무시
-  }
+  } catch { /* 캐시 쓰기 실패는 무시 */ }
 }
 
 // ─── 날짜 유틸 ────────────────────────────────────────────────────────────────
@@ -46,7 +42,6 @@ async function queryMixpanel(script: string): Promise<unknown> {
   if (!apiSecret) throw new Error('MIXPANEL_API_SECRET not set');
 
   const encoded = Buffer.from(`${apiSecret}:`).toString('base64');
-
   const res = await fetch('https://mixpanel.com/api/2.0/jql', {
     method: 'POST',
     headers: {
@@ -60,87 +55,55 @@ async function queryMixpanel(script: string): Promise<unknown> {
     const text = await res.text();
     throw new Error(`Mixpanel JQL error ${res.status}: ${text}`);
   }
-
   const json = await res.json();
-  // Mixpanel이 200이지만 error 필드를 반환하는 경우 (rate limit 등)
   if (json && typeof json === 'object' && 'error' in json) {
     throw new Error(`Mixpanel JQL error: ${(json as { error: string }).error}`);
   }
   return json;
 }
 
-// ─── 판매 통계 ────────────────────────────────────────────────────────────────
-export async function getSalesStats(
-  itemName: string,
-  months: 3 | 6 | 12
-): Promise<SalesStats> {
-  const cacheKey = `stats|${itemName}|${months}`;
-  const cached = cacheRead<SalesStats>(cacheKey);
-  if (cached) return cached;
-
-  const { from, to } = getDateRange(months);
-  const period = `${months}m` as '3m' | '6m' | '12m';
-
-  const script = `
-function main() {
-  return Events({
-    from_date: '${from}',
-    to_date: '${to}',
-    event_selectors: [{ event: 'payment_success' }]
-  })
-  .filter(function(e) {
-    return e.properties.item_name === ${JSON.stringify(itemName)};
-  })
-  .map(function(e) {
-    var qty = e.properties.quantity || 1;
-    var amt = e.properties.amount || 0;
-    return amt / qty;
-  })
-  .reduce([
-    mixpanel.reducer.numeric_summary(),
-    mixpanel.reducer.numeric_percentiles([1, 50, 99])
-  ]);
+// ─── Raw 이벤트 타입 ──────────────────────────────────────────────────────────
+interface RawEvent {
+  time: number;  // ms timestamp
+  price: number;
+  serviceType: string;
 }
-`;
 
-  const raw = await queryMixpanel(script) as Array<[
-    { count: number; avg: number },
-    Array<{ percentile: number; value: number }>
-  ]>;
+// ─── 이벤트 배열에서 통계 계산 (서버사이드) ─────────────────────────────────
+function computeStats(events: RawEvent[], itemName: string): SalesStats {
+  const prices = events.filter(e => e.price > 0).map(e => e.price);
 
-  const row = Array.isArray(raw) && raw[0] ? raw[0] : null;
-  const summary = row ? row[0] : null;
-  const percentiles = row ? row[1] : null;
-
-  if (!summary || !summary.count || summary.count === 0) {
-    const noData: SalesStats = { period, itemName, count: 0, minPrice: 0, avgPrice: 0, medianPrice: 0, maxPrice: 0, noData: true };
-    cacheWrite(cacheKey, noData);
-    return noData;
+  if (prices.length === 0) {
+    return { period: '3m', itemName, count: 0, minPrice: 0, avgPrice: 0, medianPrice: 0, maxPrice: 0, noData: true };
   }
 
-  const getPercentile = (p: number) => percentiles?.find(x => x.percentile === p)?.value ?? 0;
+  const sorted = [...prices].sort((a, b) => a - b);
+  const avg = prices.reduce((s, v) => s + v, 0) / prices.length;
+  const median = sorted[Math.floor(sorted.length / 2)];
 
-  const stats: SalesStats = {
-    period,
-    itemName,
-    count: summary.count,
-    minPrice: Math.round(getPercentile(1)),
-    avgPrice: Math.round(summary.avg),
-    medianPrice: Math.round(getPercentile(50)),
-    maxPrice: Math.round(getPercentile(99)),
+  return {
+    period: '3m', itemName,
+    count: prices.length,
+    minPrice: Math.round(sorted[0]),
+    avgPrice: Math.round(avg),
+    medianPrice: Math.round(median),
+    maxPrice: Math.round(sorted[sorted.length - 1]),
     noData: false,
   };
-  cacheWrite(cacheKey, stats);
-  return stats;
 }
 
-// ─── 판매 점 데이터 ────────────────────────────────────────────────────────────
-export async function getSalesDots(itemName: string, months: 3 | 6 | 12): Promise<SalesDot[]> {
-  const cacheKey = `dots|${itemName}|${months}`;
-  const cached = cacheRead<SalesDot[]>(cacheKey);
+// ─── 상품당 JQL 1회, 3m 데이터만 취득 ────────────────────────────────────────
+interface Sales3mData {
+  stats: SalesStats;
+  dots: RawEvent[];
+}
+
+async function getSales3m(itemName: string): Promise<Sales3mData> {
+  const cacheKey = `3m|${itemName}`;
+  const cached = cacheRead<Sales3mData>(cacheKey);
   if (cached) return cached;
 
-  const { from, to } = getDateRange(months);
+  const { from, to } = getDateRange(3);
 
   const script = `
 function main() {
@@ -155,19 +118,34 @@ function main() {
   .map(function(e) {
     var qty = e.properties.quantity || 1;
     var amt = e.properties.amount || 0;
-    return { date: e.time, price: amt / qty, serviceType: e.properties.service_type || '' };
+    return { time: e.time, price: amt / qty, serviceType: e.properties.service_type || '' };
   });
 }
 `;
 
-  const raw = await queryMixpanel(script) as Array<{ date: number; price: number; serviceType: string }>;
-  if (!Array.isArray(raw)) return [];
+  const raw = await queryMixpanel(script) as RawEvent[];
+  const events = Array.isArray(raw) ? raw : [];
 
-  const dots = raw.map((r) => ({
-    date: new Date(r.date).toISOString().split('T')[0],
-    price: Math.round(r.price),
-    serviceType: r.serviceType,
-  }));
-  cacheWrite(cacheKey, dots);
-  return dots;
+  const result: Sales3mData = {
+    stats: computeStats(events, itemName),
+    dots: events,
+  };
+  cacheWrite(cacheKey, result);
+  return result;
+}
+
+export async function getSalesStats(itemName: string): Promise<SalesStats> {
+  const { stats } = await getSales3m(itemName);
+  return stats;
+}
+
+export async function getSalesDots(itemName: string): Promise<SalesDot[]> {
+  const { dots } = await getSales3m(itemName);
+  return dots
+    .filter(e => e.price > 0)
+    .map(e => ({
+      date: new Date(e.time).toISOString().split('T')[0],
+      price: Math.round(e.price),
+      serviceType: e.serviceType,
+    }));
 }

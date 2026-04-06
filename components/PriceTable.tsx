@@ -80,13 +80,9 @@ export default function PriceTable({ products }: Props) {
   const fetchedNamesRef = useRef<Set<string>>(new Set());
 
   const fetchStats = useCallback(async (productName: string) => {
-    const [res3m, res6m] = await Promise.all([
-      fetch(`/api/sales-stats?itemName=${encodeURIComponent(productName)}&months=3`),
-      fetch(`/api/sales-stats?itemName=${encodeURIComponent(productName)}&months=6`),
-    ]);
-    const stats3m: SalesStats = await res3m.json();
-    const stats6m: SalesStats = await res6m.json();
-    return { stats3m, stats6m };
+    const res = await fetch(`/api/sales-stats?itemName=${encodeURIComponent(productName)}`);
+    const stats: SalesStats = await res.json();
+    return stats;
   }, []);
 
   useEffect(() => {
@@ -102,19 +98,13 @@ export default function PriceTable({ products }: Props) {
     Promise.all(
       newProducts.map(async (p) => {
         const name = p.finalName!;
-        const { stats3m, stats6m } = await fetchStats(name);
+        const stats = await fetchStats(name);
         const margin = 7;
         const wholesalePrice = calcWholesalePrice(p.supplyPrice, margin / 100);
 
-        let recommendedPrice: number | '데이터 없음' = '데이터 없음';
-        let recommendedPriceTag: '6m' | null = null;
-
-        if (!stats3m.noData) {
-          recommendedPrice = calcRecommendedPrice(stats3m.avgPrice);
-        } else if (!stats6m.noData) {
-          recommendedPrice = calcRecommendedPrice(stats6m.avgPrice);
-          recommendedPriceTag = '6m';
-        }
+        const recommendedPrice: number | '데이터 없음' = stats.noData
+          ? '데이터 없음'
+          : calcRecommendedPrice(stats.avgPrice);
 
         const appPrice = calcAppPrice(
           recommendedPrice === '데이터 없음' ? null : recommendedPrice,
@@ -138,11 +128,9 @@ export default function PriceTable({ products }: Props) {
           dailyshotFee: fee,
           dailyshotFeeRate: feeRate,
           recommendedPrice,
-          recommendedPriceTag,
           appPrice,
           priceDiff,
-          salesStats3m: stats3m.noData ? null : stats3m,
-          salesStats6m: stats6m.noData ? null : stats6m,
+          salesStats: stats.noData ? null : stats,
         } as PriceRow;
       })
     ).then((newRows) => {
@@ -294,14 +282,7 @@ export default function PriceTable({ products }: Props) {
                   <td className="py-3 px-3 text-right text-gray-700">
                     {row.recommendedPrice === '데이터 없음'
                       ? <span className="text-gray-400">데이터 없음</span>
-                      : (
-                        <span>
-                          {fmt(row.recommendedPrice as number)}
-                          {row.recommendedPriceTag && (
-                            <span className="ml-1 text-xs bg-orange-100 text-orange-500 px-1.5 py-0.5 rounded">6m</span>
-                          )}
-                        </span>
-                      )
+                      : <span>{fmt(row.recommendedPrice as number)}</span>
                     }
                   </td>
 

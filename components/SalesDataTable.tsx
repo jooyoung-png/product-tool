@@ -8,15 +8,12 @@ interface Props {
   productNames: string[];
 }
 
-type Period = 3 | 6 | 12;
-
 function fmt(n: number) {
   return n.toLocaleString() + '원';
 }
 
 // 모달: 특정 상품의 판매가 분포 팝업
 function ChartModal({ name, onClose }: { name: string; onClose: () => void }) {
-  const [period, setPeriod] = useState<Period>(3);
   const [dots, setDots] = useState<SalesDot[]>([]);
   const [stats, setStats] = useState<SalesStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -24,14 +21,14 @@ function ChartModal({ name, onClose }: { name: string; onClose: () => void }) {
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      fetch(`/api/sales-dots?itemName=${encodeURIComponent(name)}&months=${period}`).then(r => r.json()),
-      fetch(`/api/sales-stats?itemName=${encodeURIComponent(name)}&months=${period}`).then(r => r.json()),
+      fetch(`/api/sales-dots?itemName=${encodeURIComponent(name)}`).then(r => r.json()),
+      fetch(`/api/sales-stats?itemName=${encodeURIComponent(name)}`).then(r => r.json()),
     ]).then(([dotsData, statsData]) => {
       setDots(dotsData.dots ?? []);
       setStats(statsData);
       setLoading(false);
     });
-  }, [name, period]);
+  }, [name]);
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -43,24 +40,9 @@ function ChartModal({ name, onClose }: { name: string; onClose: () => void }) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div>
             <h2 className="text-base font-semibold text-gray-800">{name}</h2>
-            <p className="text-xs text-gray-400 mt-0.5">판매 가격 분포 분석</p>
+            <p className="text-xs text-gray-400 mt-0.5">판매 가격 분포 분석 (최근 3개월)</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
-        </div>
-
-        {/* 기간 선택 */}
-        <div className="flex gap-1 px-6 pt-4">
-          {([3, 6, 12] as Period[]).map(p => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-                period === p ? 'bg-blue-600 text-white' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'
-              }`}
-            >
-              {p}개월
-            </button>
-          ))}
         </div>
 
         {/* 통계 카드 */}
@@ -102,41 +84,30 @@ function ChartModal({ name, onClose }: { name: string; onClose: () => void }) {
 }
 
 export default function SalesDataTable({ productNames }: Props) {
-  const [period, setPeriod] = useState<Period>(3);
   const [statsMap, setStatsMap] = useState<Record<string, SalesStats>>({});
   const [loadingNames, setLoadingNames] = useState<string[]>([]);
   const [modalName, setModalName] = useState<string | null>(null);
-  const fetchedRef = useRef<{ period: Period; names: Set<string> }>({ period: 3, names: new Set() });
+  const fetchedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (productNames.length === 0) return;
 
-    // Period changed → reset and re-fetch all
-    if (fetchedRef.current.period !== period) {
-      fetchedRef.current = { period, names: new Set() };
-      setStatsMap({});
-    }
-
-    const newNames = productNames.filter(n => !fetchedRef.current.names.has(n));
+    const newNames = productNames.filter(n => !fetchedRef.current.has(n));
     if (newNames.length === 0) return;
 
-    // Ref를 fetch 시작 전에 업데이트 (strict mode 이중 실행 시 중복 fetch 방지)
-    newNames.forEach(n => fetchedRef.current.names.add(n));
+    newNames.forEach(n => fetchedRef.current.add(n));
     setLoadingNames(prev => [...prev, ...newNames]);
 
     Promise.all(
       newNames.map(async (name) => {
-        const res = await fetch(
-          `/api/sales-stats?itemName=${encodeURIComponent(name)}&months=${period}`
-        );
+        const res = await fetch(`/api/sales-stats?itemName=${encodeURIComponent(name)}`);
         if (!res.ok) {
-          const fallback: SalesStats = { noData: true, count: 0, minPrice: 0, avgPrice: 0, medianPrice: 0, maxPrice: 0, period: `${period}m` as const, itemName: name };
+          const fallback: SalesStats = { noData: true, count: 0, minPrice: 0, avgPrice: 0, medianPrice: 0, maxPrice: 0, period: '3m', itemName: name };
           return [name, fallback] as [string, SalesStats];
         }
         const data: SalesStats = await res.json();
-        // API가 error 필드를 반환하는 경우 (rate limit 등)
         if ('error' in data) {
-          const fallback: SalesStats = { noData: true, count: 0, minPrice: 0, avgPrice: 0, medianPrice: 0, maxPrice: 0, period: `${period}m` as const, itemName: name };
+          const fallback: SalesStats = { noData: true, count: 0, minPrice: 0, avgPrice: 0, medianPrice: 0, maxPrice: 0, period: '3m', itemName: name };
           return [name, fallback] as [string, SalesStats];
         }
         return [name, data] as [string, SalesStats];
@@ -145,28 +116,13 @@ export default function SalesDataTable({ productNames }: Props) {
       setStatsMap(prev => ({ ...prev, ...Object.fromEntries(entries) }));
       setLoadingNames(prev => prev.filter(n => !newNames.includes(n)));
     });
-  }, [productNames, period]);
+  }, [productNames]);
 
   return (
     <>
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-800">Mixpanel 판매 데이터</h2>
-          <div className="flex gap-1">
-            {([3, 6, 12] as Period[]).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-                  period === p
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                }`}
-              >
-                {p}개월
-              </button>
-            ))}
-          </div>
+          <h2 className="text-lg font-semibold text-gray-800">Mixpanel 판매 데이터 <span className="text-sm font-normal text-gray-400">(최근 3개월)</span></h2>
         </div>
 
         <div className="overflow-x-auto">
