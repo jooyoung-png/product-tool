@@ -63,7 +63,7 @@ export default function SavedSessions({ currentProducts, onLoad }: Props) {
   };
 
   return (
-    <aside className="w-56 shrink-0 bg-white border-r border-gray-100 min-h-screen flex flex-col">
+    <aside className="w-56 shrink-0 bg-white border-r border-gray-100 h-full flex flex-col">
       <div className="p-4 border-b border-gray-100">
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">저장된 세션</p>
 

@@ -10,13 +10,24 @@ interface Props {
 }
 
 interface RefinedState {
-  originalName: string;
+  originalName: string;      // 원본 (변경 불가)
+  editedName: string;        // 사용자가 수정 중인 입력명
   supplyPrice: number;
   candidates: NameCandidate[];
   selectedName: string | null;
   customName: string;
   loading: boolean;
   error: string;
+}
+
+async function fetchCandidates(name: string): Promise<NameCandidate[]> {
+  const r = await fetch('/api/refine-name', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ productName: name }),
+  });
+  const data = await r.json();
+  return data.candidates || [];
 }
 
 export default function RefineModal({ products, onConfirm, onClose }: Props) {
@@ -26,6 +37,7 @@ export default function RefineModal({ products, onConfirm, onClose }: Props) {
   useEffect(() => {
     const initial: RefinedState[] = products.map((p) => ({
       originalName: p.name,
+      editedName: p.name,
       supplyPrice: p.supplyPrice,
       candidates: [],
       selectedName: null,
@@ -35,16 +47,9 @@ export default function RefineModal({ products, onConfirm, onClose }: Props) {
     }));
     setStates(initial);
 
-    // 각 상품명 Claude API로 정제 (병렬)
     products.forEach((p, idx) => {
-      fetch('/api/refine-name', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productName: p.name }),
-      })
-        .then((r) => r.json())
-        .then((data) => {
-          const candidates: NameCandidate[] = data.candidates || [];
+      fetchCandidates(p.name)
+        .then((candidates) => {
           setStates((prev) => {
             const next = [...prev];
             next[idx] = {
@@ -76,6 +81,34 @@ export default function RefineModal({ products, onConfirm, onClose }: Props) {
     });
   };
 
+  const handleResearch = (idx: number) => {
+    const name = states[idx].editedName.trim();
+    if (!name) return;
+    updateState(idx, { loading: true, candidates: [], selectedName: null, customName: '', error: '' });
+    fetchCandidates(name)
+      .then((candidates) => {
+        setStates((prev) => {
+          const next = [...prev];
+          next[idx] = {
+            ...next[idx],
+            candidates,
+            selectedName: candidates.length === 1 && candidates[0].matchRate >= 90
+              ? candidates[0].name
+              : null,
+            loading: false,
+          };
+          return next;
+        });
+      })
+      .catch((err) => {
+        setStates((prev) => {
+          const next = [...prev];
+          next[idx] = { ...next[idx], loading: false, error: String(err) };
+          return next;
+        });
+      });
+  };
+
   const handleConfirm = () => {
     setConfirming(true);
     const refined: RefinedProduct[] = states.map((s) => {
@@ -86,7 +119,7 @@ export default function RefineModal({ products, onConfirm, onClose }: Props) {
         finalName = s.selectedName;
       }
       return {
-        originalName: s.originalName,
+        originalName: s.editedName.trim() || s.originalName,
         supplyPrice: s.supplyPrice,
         candidates: s.candidates,
         selectedName: s.selectedName,
@@ -115,10 +148,25 @@ export default function RefineModal({ products, onConfirm, onClose }: Props) {
         <div className="overflow-y-auto flex-1 px-6 py-4 space-y-6">
           {states.map((s, idx) => (
             <div key={idx} className="border border-gray-100 rounded-xl p-4">
+              {/* 입력명 수정 영역 */}
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded">입력</span>
-                <span className="font-medium text-gray-800">{s.originalName}</span>
-                <span className="text-xs text-gray-400 ml-auto">공급가 {s.supplyPrice.toLocaleString()}원</span>
+                <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded shrink-0">입력</span>
+                <input
+                  type="text"
+                  value={s.editedName}
+                  onChange={(e) => updateState(idx, { editedName: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleResearch(idx); }}
+                  disabled={s.loading}
+                  className="flex-1 border border-gray-200 rounded-lg px-2 py-1 text-sm text-gray-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
+                />
+                <button
+                  onClick={() => handleResearch(idx)}
+                  disabled={s.loading || !s.editedName.trim()}
+                  className="shrink-0 text-xs px-2 py-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                >
+                  재검색
+                </button>
+                <span className="text-xs text-gray-400 shrink-0">공급가 {s.supplyPrice.toLocaleString()}원</span>
               </div>
 
               {s.loading && (
@@ -148,9 +196,7 @@ export default function RefineModal({ products, onConfirm, onClose }: Props) {
                         type="checkbox"
                         checked={s.selectedName === c.name}
                         onChange={(e) => {
-                          updateState(idx, {
-                            selectedName: e.target.checked ? c.name : null,
-                          });
+                          updateState(idx, { selectedName: e.target.checked ? c.name : null });
                         }}
                         className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       />
