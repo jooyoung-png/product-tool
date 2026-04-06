@@ -167,7 +167,7 @@ export default function PriceTable({ products }: Props) {
         const updated = computeRow(row, marginPct, overrideApp);
         // 앱 판매가 input도 동기화 (도매수익률 변경 시 앱 판매가가 재계산되므로)
         if (overrideApp === undefined) {
-          setInputs((prev2) => ({ ...prev2, [productName]: { margin: value, appPrice: String(updated.appPrice) } }));
+          setInputs((prev2) => ({ ...prev2, [productName]: { ...prev2[productName], margin: value, appPrice: String(updated.appPrice) } }));
         }
         return updated;
       })
