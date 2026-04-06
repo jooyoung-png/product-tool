@@ -131,6 +131,7 @@ export default function PriceTable({ products }: Props) {
           appPrice,
           priceDiff,
           salesStats: stats.noData ? null : stats,
+          rateLimited: stats.rateLimited ?? false,
         } as PriceRow;
       })
     ).then((newRows) => {
@@ -321,7 +322,9 @@ export default function PriceTable({ products }: Props) {
 
                   <td className="py-3 px-3 text-right text-gray-700">
                     {row.recommendedPrice === '데이터 없음'
-                      ? <span className="text-gray-400">데이터 없음</span>
+                      ? row.rateLimited
+                        ? <span className="text-amber-400 text-xs">조회 대기중</span>
+                        : <span className="text-gray-400">데이터 없음</span>
                       : <span>{fmt(row.recommendedPrice as number)}</span>
                     }
                   </td>

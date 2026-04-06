@@ -151,6 +151,21 @@ export default function SalesDataTable({ productNames }: Props) {
                     </tr>
                   );
                 }
+                if (s.rateLimited) {
+                  return (
+                    <tr key={name} className="border-b border-gray-50">
+                      <td className="py-3 px-3 font-medium text-gray-500">{name}</td>
+                      <td colSpan={5} className="py-3 px-3 text-center">
+                        <span className="inline-flex items-center gap-1.5 text-xs text-amber-500">
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          조회 대기중 (rate limit)
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                }
                 if (s.noData) {
                   return (
                     <tr key={name} className="border-b border-gray-50">

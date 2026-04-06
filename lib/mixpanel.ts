@@ -51,6 +51,11 @@ async function queryMixpanel(script: string): Promise<unknown> {
     body: new URLSearchParams({ script, project_id: String(PROJECT_ID) }),
   });
 
+  if (res.status === 429) {
+    const err = new Error(`rate_limited`) as Error & { rateLimited: boolean };
+    err.rateLimited = true;
+    throw err;
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Mixpanel JQL error ${res.status}: ${text}`);
@@ -123,9 +128,21 @@ function main() {
 }
 `;
 
-  const raw = await queryMixpanel(script) as RawEvent[];
-  const events = Array.isArray(raw) ? raw : [];
+  let raw: RawEvent[];
+  try {
+    raw = await queryMixpanel(script) as RawEvent[];
+  } catch (err) {
+    // rate limit 시 캐시 저장 없이 rateLimited stats 반환
+    if (err instanceof Error && (err as Error & { rateLimited?: boolean }).rateLimited) {
+      return {
+        stats: { period: '3m', itemName, count: 0, minPrice: 0, avgPrice: 0, medianPrice: 0, maxPrice: 0, noData: true, rateLimited: true },
+        dots: [],
+      };
+    }
+    throw err;
+  }
 
+  const events = Array.isArray(raw) ? raw : [];
   const result: Sales3mData = {
     stats: computeStats(events, itemName),
     dots: events,

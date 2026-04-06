@@ -26,6 +26,7 @@ export interface SalesStats {
   medianPrice: number;
   maxPrice: number;
   noData: boolean;
+  rateLimited?: boolean; // true: rate limit으로 조회 실패 (데이터 없음과 구분)
 }
 
 export interface SalesDot {
@@ -46,6 +47,7 @@ export interface PriceRow {
   appPrice: number; // 앱 내 판매가 (유저 수정 가능)
   priceDiff: number | null; // 앱 판매가 - 추천가 (null if 데이터 없음)
   salesStats: SalesStats | null;
+  rateLimited?: boolean; // true: rate limit으로 Mixpanel 조회 실패
 }
 
 export interface SavedSession {
