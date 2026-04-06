@@ -35,18 +35,21 @@ function fmtDiff(diff: number) {
   return prefix + diff.toLocaleString() + '원';
 }
 
-function applyDSCap(appPrice: number, wholesalePrice: number, storeProfit: number) {
+function applyDSCap(appPrice: number, wholesalePrice: number, storeProfit: number, supplyPrice: number) {
   let fee = calcDailyshotFee(appPrice, wholesalePrice, storeProfit);
   let feeRate = calcDailyshotFeeRate(fee, appPrice);
   let wp = wholesalePrice;
+  let effectiveMarginPct: number | null = null;
 
   // DS 수수료율 13.3% 상한 초과시 도매가 상향 조정
   if (feeRate > 0.133) {
     wp = appPrice - storeProfit - appPrice * 0.133;
     fee = calcDailyshotFee(appPrice, wp, storeProfit);
     feeRate = calcDailyshotFeeRate(fee, appPrice);
+    // 상향된 도매가로 실제 도매수익률 역산: margin = 1 - (공급가 * 1.1) / 도매판매가
+    effectiveMarginPct = Math.round((1 - (supplyPrice * 1.1) / wp) * 1000) / 10;
   }
-  return { wholesalePrice: wp, fee, feeRate };
+  return { wholesalePrice: wp, fee, feeRate, effectiveMarginPct };
 }
 
 function computeRow(base: PriceRow, marginPct: number, overrideAppPrice?: number): PriceRow {
@@ -60,13 +63,14 @@ function computeRow(base: PriceRow, marginPct: number, overrideAppPrice?: number
       );
 
   const storeProfit = calcStoreProfit(appPrice);
-  const { wholesalePrice: wp, fee, feeRate } = applyDSCap(appPrice, wholesalePrice, storeProfit);
+  const { wholesalePrice: wp, fee, feeRate, effectiveMarginPct } = applyDSCap(appPrice, wholesalePrice, storeProfit, base.supplyPrice);
+  const actualMarginPct = effectiveMarginPct !== null ? effectiveMarginPct : marginPct;
 
   const priceDiff = base.recommendedPrice !== '데이터 없음'
     ? appPrice - (base.recommendedPrice as number)
     : null;
 
-  return { ...base, wholesaleMargin: marginPct, wholesalePrice: wp, appPrice, storeProfit, dailyshotFee: fee, dailyshotFeeRate: feeRate, priceDiff };
+  return { ...base, wholesaleMargin: actualMarginPct, wholesalePrice: wp, appPrice, storeProfit, dailyshotFee: fee, dailyshotFeeRate: feeRate, priceDiff };
 }
 
 export default function PriceTable({ products }: Props) {
@@ -118,7 +122,8 @@ export default function PriceTable({ products }: Props) {
         );
 
         const storeProfit = calcStoreProfit(appPrice);
-        const { wholesalePrice: wp, fee, feeRate } = applyDSCap(appPrice, wholesalePrice, storeProfit);
+        const { wholesalePrice: wp, fee, feeRate, effectiveMarginPct } = applyDSCap(appPrice, wholesalePrice, storeProfit, p.supplyPrice);
+        const actualMargin = effectiveMarginPct !== null ? effectiveMarginPct : margin;
 
         const priceDiff = recommendedPrice !== '데이터 없음'
           ? appPrice - (recommendedPrice as number)
@@ -127,7 +132,7 @@ export default function PriceTable({ products }: Props) {
         return {
           productName: name,
           supplyPrice: p.supplyPrice,
-          wholesaleMargin: margin,
+          wholesaleMargin: actualMargin,
           wholesalePrice: wp,
           storeProfit,
           dailyshotFee: fee,
@@ -165,9 +170,12 @@ export default function PriceTable({ products }: Props) {
         const currentAppPrice = parseInt(inputs[productName]?.appPrice?.replace(/,/g, '') ?? '', 10);
         const overrideApp = !isNaN(currentAppPrice) && currentAppPrice > 0 ? currentAppPrice : undefined;
         const updated = computeRow(row, marginPct, overrideApp);
-        // 앱 판매가 input도 동기화 (도매수익률 변경 시 앱 판매가가 재계산되므로)
+        // cap 적용 시 실제 도매수익률 & 앱 판매가를 input에 반영
+        const effectiveMarginStr = String(updated.wholesaleMargin);
         if (overrideApp === undefined) {
-          setInputs((prev2) => ({ ...prev2, [productName]: { ...prev2[productName], margin: value, appPrice: String(updated.appPrice) } }));
+          setInputs((prev2) => ({ ...prev2, [productName]: { ...prev2[productName], margin: effectiveMarginStr, appPrice: String(updated.appPrice) } }));
+        } else if (updated.wholesaleMargin !== marginPct) {
+          setInputs((prev2) => ({ ...prev2, [productName]: { ...prev2[productName], margin: effectiveMarginStr } }));
         }
         return updated;
       })
