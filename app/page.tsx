@@ -1,23 +1,29 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import InputSection from '@/components/InputSection';
 import RefineModal from '@/components/RefineModal';
 import PriceTable from '@/components/PriceTable';
 import SalesDataTable from '@/components/SalesDataTable';
 import ProductRefBanner from '@/components/ProductRefBanner';
 import SavedSessions from '@/components/SavedSessions';
-import { InputProduct, RefinedProduct } from '@/types';
+import { InputProduct, RefinedProduct, PriceRow, SalesStats } from '@/types';
 
 export default function Home() {
   const [inputProducts, setInputProducts] = useState<InputProduct[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [refinedProducts, setRefinedProducts] = useState<RefinedProduct[]>([]);
   const [loading, setLoading] = useState(false);
-  // For excluding-then-retrying a single product
   const [retryProduct, setRetryProduct] = useState<InputProduct | null>(null);
-  // Increment to force remount of PriceTable/SalesDataTable on session load
   const [sessionKey, setSessionKey] = useState(0);
+
+  // Mixpanel 데이터 수집 (저장용) — ref로 관리해 리렌더 방지
+  const currentRowsRef = useRef<PriceRow[]>([]);
+  const currentStatsMapRef = useRef<Record<string, SalesStats>>({});
+
+  // 세션 로드 시 초기값 (API 재호출 없이 렌더)
+  const [initialRows, setInitialRows] = useState<PriceRow[] | undefined>(undefined);
+  const [initialStatsMap, setInitialStatsMap] = useState<Record<string, SalesStats> | undefined>(undefined);
 
   const handleInput = (products: InputProduct[]) => {
     setInputProducts(products);
@@ -26,6 +32,9 @@ export default function Home() {
   };
 
   const handleConfirm = (refined: RefinedProduct[]) => {
+    // 새 상품 추가 시 initialRows/initialStatsMap 초기화 (신규 fetch)
+    setInitialRows(undefined);
+    setInitialStatsMap(undefined);
     setRefinedProducts((prev) => {
       const existingNames = new Set(prev.map(p => p.finalName).filter(Boolean));
       const toAdd = refined.filter(p => !p.finalName || !existingNames.has(p.finalName));
@@ -50,8 +59,16 @@ export default function Home() {
     setRetryProduct(null);
   }, []);
 
-  const handleLoadSession = useCallback((products: RefinedProduct[]) => {
+  const handleLoadSession = useCallback((
+    products: RefinedProduct[],
+    savedRows?: PriceRow[],
+    savedStatsMap?: Record<string, SalesStats>,
+  ) => {
     setRefinedProducts(products);
+    setInitialRows(savedRows);
+    setInitialStatsMap(savedStatsMap);
+    currentRowsRef.current = savedRows ?? [];
+    currentStatsMapRef.current = savedStatsMap ?? {};
     setSessionKey(k => k + 1);
   }, []);
 
@@ -62,7 +79,12 @@ export default function Home() {
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
       {/* 사이드바 */}
-      <SavedSessions currentProducts={refinedProducts} onLoad={handleLoadSession} />
+      <SavedSessions
+        currentProducts={refinedProducts}
+        currentRowsRef={currentRowsRef}
+        currentStatsMapRef={currentStatsMapRef}
+        onLoad={handleLoadSession}
+      />
 
       {/* 메인 콘텐츠 */}
       <main className="flex-1 overflow-y-auto">
@@ -85,11 +107,21 @@ export default function Home() {
           {refinedProducts.length > 0 && (
             <div className="space-y-6">
               {/* 가격표 */}
-              <PriceTable key={`price-${sessionKey}`} products={refinedProducts} />
+              <PriceTable
+                key={`price-${sessionKey}`}
+                products={refinedProducts}
+                initialRows={initialRows}
+                onRowsChange={r => { currentRowsRef.current = r; }}
+              />
 
               {/* Mixpanel 판매 데이터 */}
               {confirmedNames.length > 0 && (
-                <SalesDataTable key={`sales-${sessionKey}`} productNames={confirmedNames} />
+                <SalesDataTable
+                  key={`sales-${sessionKey}`}
+                  productNames={confirmedNames}
+                  initialStatsMap={initialStatsMap}
+                  onStatsMapChange={m => { currentStatsMapRef.current = m; }}
+                />
               )}
 
               {/* 상품명 미선택 섹터 */}

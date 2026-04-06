@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { RefinedProduct, SavedSession } from '@/types';
+import { useState, useEffect, MutableRefObject } from 'react';
+import { RefinedProduct, SavedSession, PriceRow, SalesStats } from '@/types';
 
 const STORAGE_KEY = 'product-tool-sessions';
 
@@ -29,10 +29,12 @@ function formatDate(iso: string) {
 
 interface Props {
   currentProducts: RefinedProduct[];
-  onLoad: (products: RefinedProduct[]) => void;
+  currentRowsRef: MutableRefObject<PriceRow[]>;
+  currentStatsMapRef: MutableRefObject<Record<string, SalesStats>>;
+  onLoad: (products: RefinedProduct[], savedRows?: PriceRow[], savedStatsMap?: Record<string, SalesStats>) => void;
 }
 
-export default function SavedSessions({ currentProducts, onLoad }: Props) {
+export default function SavedSessions({ currentProducts, currentRowsRef, currentStatsMapRef, onLoad }: Props) {
   const [sessions, setSessions] = useState<SavedSession[]>([]);
   const [title, setTitle] = useState('');
   const [saving, setSaving] = useState(false);
@@ -43,11 +45,21 @@ export default function SavedSessions({ currentProducts, onLoad }: Props) {
 
   const handleSave = () => {
     if (!title.trim()) return;
+
+    // rateLimited 항목 제외하고 저장
+    const savedRows = currentRowsRef.current.filter(r => !r.rateLimited);
+    const savedStatsMap: Record<string, SalesStats> = {};
+    Object.entries(currentStatsMapRef.current).forEach(([name, s]) => {
+      if (!s.rateLimited) savedStatsMap[name] = s;
+    });
+
     const newSession: SavedSession = {
       id: `${Date.now()}`,
       title: title.trim(),
       savedAt: new Date().toISOString(),
       refinedProducts: currentProducts,
+      savedRows: savedRows.length > 0 ? savedRows : undefined,
+      savedStatsMap: Object.keys(savedStatsMap).length > 0 ? savedStatsMap : undefined,
     };
     const updated = [newSession, ...sessions];
     setSessions(updated);
@@ -112,10 +124,16 @@ export default function SavedSessions({ currentProducts, onLoad }: Props) {
           <ul className="space-y-1">
             {sessions.map(s => (
               <li key={s.id}>
-                <div className="group flex items-start gap-1 rounded-lg hover:bg-gray-50 p-2 cursor-pointer" onClick={() => onLoad(s.refinedProducts)}>
+                <div
+                  className="group flex items-start gap-1 rounded-lg hover:bg-gray-50 p-2 cursor-pointer"
+                  onClick={() => onLoad(s.refinedProducts, s.savedRows, s.savedStatsMap)}
+                >
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-gray-800 truncate">{s.title}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{formatDate(s.savedAt)}</p>
+                    {s.savedRows && (
+                      <p className="text-xs text-green-500 mt-0.5">📦 데이터 저장됨</p>
+                    )}
                   </div>
                   <button
                     onClick={e => { e.stopPropagation(); handleDelete(s.id); }}

@@ -13,6 +13,8 @@ import {
 
 interface Props {
   products: RefinedProduct[];
+  initialRows?: PriceRow[];                    // 세션 로드 시 미리 채워진 rows
+  onRowsChange?: (rows: PriceRow[]) => void;   // 저장용 콜백
 }
 
 // 행별 입력 중인 raw 문자열 (즉시 재계산용)
@@ -73,11 +75,25 @@ function computeRow(base: PriceRow, marginPct: number, overrideAppPrice?: number
   return { ...base, wholesaleMargin: actualMarginPct, wholesalePrice: wp, appPrice, storeProfit, dailyshotFee: fee, dailyshotFeeRate: feeRate, priceDiff };
 }
 
-export default function PriceTable({ products }: Props) {
-  const [rows, setRows] = useState<PriceRow[]>([]);
-  const [inputs, setInputs] = useState<Record<string, RowInput>>({});
+export default function PriceTable({ products, initialRows, onRowsChange }: Props) {
+  const [rows, setRows] = useState<PriceRow[]>(() => initialRows ?? []);
+  const [inputs, setInputs] = useState<Record<string, RowInput>>(() => {
+    const m: Record<string, RowInput> = {};
+    (initialRows ?? []).forEach(r => {
+      m[r.productName] = { supplyPrice: String(r.supplyPrice), margin: String(r.wholesaleMargin), appPrice: String(r.appPrice) };
+    });
+    return m;
+  });
   const [isLoading, setIsLoading] = useState(false);
-  const fetchedNamesRef = useRef<Set<string>>(new Set());
+  // 세션 로드 시: rateLimited가 아닌 행은 이미 있으므로 fetch 생략
+  const fetchedNamesRef = useRef<Set<string>>(new Set(
+    (initialRows ?? []).filter(r => !r.rateLimited).map(r => r.productName)
+  ));
+
+  // rows 변경 시 부모에 알림 (저장용)
+  useEffect(() => {
+    if (rows.length > 0) onRowsChange?.(rows);
+  }, [rows, onRowsChange]);
 
   const fetchStats = useCallback(async (productName: string) => {
     const res = await fetch(`/api/sales-stats?itemName=${encodeURIComponent(productName)}`);

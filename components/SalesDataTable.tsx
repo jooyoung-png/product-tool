@@ -6,6 +6,8 @@ import SalesScatterChart from '@/components/ScatterChart';
 
 interface Props {
   productNames: string[];
+  initialStatsMap?: Record<string, SalesStats>;      // 세션 로드 시 미리 채워진 통계
+  onStatsMapChange?: (map: Record<string, SalesStats>) => void; // 저장용 콜백
 }
 
 function fmt(n: number) {
@@ -83,11 +85,21 @@ function ChartModal({ name, onClose }: { name: string; onClose: () => void }) {
   );
 }
 
-export default function SalesDataTable({ productNames }: Props) {
-  const [statsMap, setStatsMap] = useState<Record<string, SalesStats>>({});
+export default function SalesDataTable({ productNames, initialStatsMap, onStatsMapChange }: Props) {
+  const [statsMap, setStatsMap] = useState<Record<string, SalesStats>>(() => initialStatsMap ?? {});
   const [loadingNames, setLoadingNames] = useState<string[]>([]);
   const [modalName, setModalName] = useState<string | null>(null);
-  const fetchedRef = useRef<Set<string>>(new Set());
+  // 세션 로드 시: rateLimited가 아닌 항목은 이미 있으므로 fetch 생략
+  const fetchedRef = useRef<Set<string>>(new Set(
+    Object.entries(initialStatsMap ?? {})
+      .filter(([, s]) => !s.rateLimited)
+      .map(([name]) => name)
+  ));
+
+  // statsMap 변경 시 부모에 알림 (저장용)
+  useEffect(() => {
+    if (Object.keys(statsMap).length > 0) onStatsMapChange?.(statsMap);
+  }, [statsMap, onStatsMapChange]);
 
   useEffect(() => {
     if (productNames.length === 0) return;

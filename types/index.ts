@@ -55,4 +55,6 @@ export interface SavedSession {
   title: string;
   savedAt: string; // ISO timestamp
   refinedProducts: RefinedProduct[];
+  savedRows?: PriceRow[];                        // 저장 시점의 가격표 (Mixpanel 데이터 포함)
+  savedStatsMap?: Record<string, SalesStats>;    // 저장 시점의 판매 통계 (rateLimited 제외)
 }
