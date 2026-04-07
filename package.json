@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "export-mixpanel": "node scripts/export-mixpanel.mjs",
+    "compute-stats": "node scripts/compute-price-stats.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",

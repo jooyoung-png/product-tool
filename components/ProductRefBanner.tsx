@@ -16,12 +16,8 @@ export default function ProductRefBanner() {
   const [uploadMsg, setUploadMsg] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // 과거 판매가 이력 파일
   const [phDays, setPhDays] = useState<number | null>(null);
   const [phMeta, setPhMeta] = useState<Meta | null>(null);
-  const [phUploading, setPhUploading] = useState(false);
-  const [phUploadMsg, setPhUploadMsg] = useState('');
-  const phFileRef = useRef<HTMLInputElement>(null);
 
   const fetchMeta = () => {
     fetch('/api/product-ref-meta')
@@ -64,26 +60,6 @@ export default function ProductRefBanner() {
       setUploadMsg(`오류: ${data.error}`);
     }
     setUploading(false);
-  };
-
-  const handlePhUpload = async (file: File) => {
-    if (!file.name.endsWith('.csv')) {
-      setPhUploadMsg('CSV 파일만 업로드 가능합니다.');
-      return;
-    }
-    setPhUploading(true);
-    setPhUploadMsg('');
-    const form = new FormData();
-    form.append('file', file);
-    const res = await fetch('/api/upload-price-history', { method: 'POST', body: form });
-    const data = await res.json();
-    if (data.ok) {
-      setPhUploadMsg(`업데이트 완료 (${data.fromDate} ~ ${data.toDate})`);
-      fetchPhMeta();
-    } else {
-      setPhUploadMsg(`오류: ${data.error}`);
-    }
-    setPhUploading(false);
   };
 
   const isStale = days !== null && days >= 14;
@@ -132,28 +108,15 @@ export default function ProductRefBanner() {
         </p>
       )}
 
-      {/* 과거 판매가 이력 파일 */}
+      {/* 과거 판매가 이력 */}
       <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5">
         <span className="text-gray-400 text-sm">📈</span>
         <p className="text-xs text-gray-500 flex-1">
           {phMeta
             ? `과거 판매가 이력: ${phMeta.fromDate ?? '?'} ~ ${phMeta.toDate ?? '?'} · 업데이트 ${phDays === 0 ? '오늘' : `${phDays}일 전`}`
-            : '과거 판매가 이력 파일이 없습니다.'}
+            : '과거 판매가 이력 없음 — node scripts/compute-price-stats.mjs 실행 후 git push'}
         </p>
-        <button
-          onClick={() => phFileRef.current?.click()}
-          disabled={phUploading}
-          className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 px-3 py-1 rounded-lg transition-colors whitespace-nowrap"
-        >
-          {phUploading ? '업로드 중...' : 'CSV 업데이트'}
-        </button>
       </div>
-
-      {phUploadMsg && (
-        <p className={`text-xs px-1 ${phUploadMsg.startsWith('오류') ? 'text-red-500' : 'text-green-600'}`}>
-          {phUploadMsg}
-        </p>
-      )}
 
       <input
         ref={fileRef}
@@ -163,17 +126,6 @@ export default function ProductRefBanner() {
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) handleUpload(file);
-          e.target.value = '';
-        }}
-      />
-      <input
-        ref={phFileRef}
-        type="file"
-        accept=".csv"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) handlePhUpload(file);
           e.target.value = '';
         }}
       />
