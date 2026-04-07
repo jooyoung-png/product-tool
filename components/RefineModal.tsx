@@ -18,6 +18,12 @@ interface RefinedState {
   customName: string;
   loading: boolean;
   error: string;
+  // 선택 필드 pass-through
+  bottlesPerBox?: number;
+  purpose?: string;
+  stock?: number;
+  code?: string;
+  volume?: string;
 }
 
 async function fetchCandidates(name: string): Promise<NameCandidate[]> {
@@ -44,6 +50,11 @@ export default function RefineModal({ products, onConfirm, onClose }: Props) {
       customName: '',
       loading: true,
       error: '',
+      bottlesPerBox: p.bottlesPerBox,
+      purpose: p.purpose,
+      stock: p.stock,
+      code: p.code,
+      volume: p.volume,
     }));
     setStates(initial);
 
@@ -125,6 +136,11 @@ export default function RefineModal({ products, onConfirm, onClose }: Props) {
         selectedName: s.selectedName,
         customName: s.customName,
         finalName,
+        bottlesPerBox: s.bottlesPerBox,
+        purpose: s.purpose,
+        stock: s.stock,
+        code: s.code,
+        volume: s.volume,
       };
     });
     onConfirm(refined);

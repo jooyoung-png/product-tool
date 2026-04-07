@@ -148,6 +148,11 @@ export default function PriceTable({ products, initialRows, onRowsChange }: Prop
           priceDiff,
           salesStats: stats.noData ? null : stats,
           rateLimited: stats.rateLimited ?? false,
+          bottlesPerBox: p.bottlesPerBox,
+          purpose: p.purpose,
+          stock: p.stock,
+          code: p.code,
+          volume: p.volume,
         } as PriceRow;
       })
     ).then((newRows) => {
@@ -234,6 +239,43 @@ export default function PriceTable({ products, initialRows, onRowsChange }: Prop
     );
   }
 
+  const handleExportBulkRegister = () => {
+    const headers = [
+      '상위 상품명', '쇼핑백 제공 유형', '수입제조사', '용도', '용량',
+      '공급가', '도매 마진율', '판매가', '신규 오픈일', '박스 내 병 단위',
+      'Distribution', 'Code', '상태', 'Maximum',
+    ];
+    const csvRows = rows.map(row => [
+      row.productName,                // 상위 상품명 = 정제된 상품명
+      '',                              // 쇼핑백 제공 유형 = 공란
+      '',                              // 수입제조사 = 공란
+      row.purpose ?? '',               // 용도
+      row.volume ?? '',                // 용량
+      row.supplyPrice,                 // 공급가
+      row.wholesaleMargin,             // 도매 마진율
+      row.appPrice,                    // 판매가 = 앱 판매가
+      '',                              // 신규 오픈일 = 공란
+      row.bottlesPerBox ?? '',         // 박스 내 병 단위
+      '',                              // Distribution = 공란
+      row.code ?? '',                  // Code
+      '숨김',                          // 상태 = 고정값
+      row.stock ?? '',                 // Maximum = 재고
+    ]);
+
+    const bom = '\uFEFF';
+    const csv = bom + [headers, ...csvRows]
+      .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .join('\r\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `일괄등록_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleExportCsv = () => {
     const headers = ['상품명', '공급가', '도매수익률(%)', '도매판매가', '매장순수익', 'DS수수료', 'DS수수료율(%)', '앱추천가', '앱판매가', '가격비교'];
     const csvRows = rows.map(row => [
@@ -269,15 +311,26 @@ export default function PriceTable({ products, initialRows, onRowsChange }: Prop
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-800">가격표</h2>
-        <button
-          onClick={handleExportCsv}
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
-          CSV 내보내기
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportBulkRegister}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            일괄등록 양식 내보내기
+          </button>
+          <button
+            onClick={handleExportCsv}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            CSV 내보내기
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto">

@@ -1,6 +1,12 @@
 export interface InputProduct {
   name: string;
   supplyPrice: number;
+  // 선택 필드 (파일 업로드에서만 채워짐)
+  bottlesPerBox?: number;
+  purpose?: string;
+  stock?: number;
+  code?: string;
+  volume?: string;
 }
 
 export interface NameCandidate {
@@ -15,6 +21,12 @@ export interface RefinedProduct {
   selectedName: string | null; // 체크박스로 선택된 이름
   customName: string; // 직접 입력
   finalName: string | null; // 최종 확정명
+  // 선택 필드 pass-through
+  bottlesPerBox?: number;
+  purpose?: string;
+  stock?: number;
+  code?: string;
+  volume?: string;
 }
 
 export interface SalesStats {
@@ -48,6 +60,12 @@ export interface PriceRow {
   priceDiff: number | null; // 앱 판매가 - 추천가 (null if 데이터 없음)
   salesStats: SalesStats | null;
   rateLimited?: boolean; // true: rate limit으로 Mixpanel 조회 실패
+  // 선택 필드 pass-through
+  bottlesPerBox?: number;
+  purpose?: string;
+  stock?: number;
+  code?: string;
+  volume?: string;
 }
 
 export interface SavedSession {
