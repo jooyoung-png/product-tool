@@ -51,6 +51,9 @@ interface ScoredName {
  *  4. 역방향: 상품명 토큰이 쿼리에 포함되는지
  */
 export function searchWithScores(query: string, names: string[]): ScoredName[] {
+  // 쿼리에 &가 없으면, &가 포함된 상품명은 후순위 처리
+  const queryHasAmpersand = query.includes('&');
+
   const normQuery = normalize(query);
   const synQuery = normalizeWithSynonyms(query);
 
@@ -110,6 +113,10 @@ export function searchWithScores(query: string, names: string[]): ScoredName[] {
       }
     }
 
+    // ── & 후순위 패널티 (쿼리에 &가 없을 때만) ─────────────────────
+    const ampersandPenalty = !queryHasAmpersand && name.includes('&');
+    if (ampersandPenalty) score = Math.max(0, score - 80);
+
     // ── matchRate 계산 (0~100) ───────────────────────────────────
     let matchRate = 0;
     if (score > 0) {
@@ -132,6 +139,8 @@ export function searchWithScores(query: string, names: string[]): ScoredName[] {
         matchRate = Math.round(tokenRate * 70 + lenSimilarity * 20);
       }
       matchRate = Math.min(100, Math.max(0, matchRate));
+      // & 패널티를 matchRate에도 반영 (최종 정렬 기준)
+      if (ampersandPenalty) matchRate = Math.max(0, matchRate - 30);
     }
 
     return { name, score, matchRate };
