@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 
 interface Props {
-  onSubmit: (products: InputProduct[]) => void;
+  onSubmit: (products: InputProduct[], fileName?: string) => void;
   loading: boolean;
   defaultMargin: number;
   onRecalculate: (margin: number) => void;
@@ -131,7 +131,7 @@ export default function InputSection({ onSubmit, loading, defaultMargin, onRecal
             setFileError('파일에서 상품 데이터를 찾을 수 없습니다.');
             return;
           }
-          onSubmit(products);
+          onSubmit(products, file.name);
         },
         skipEmptyLines: false,
       });
@@ -148,7 +148,7 @@ export default function InputSection({ onSubmit, loading, defaultMargin, onRecal
           setFileError('파일에서 상품 데이터를 찾을 수 없습니다.');
           return;
         }
-        onSubmit(products);
+        onSubmit(products, file.name);
       };
       reader.readAsArrayBuffer(file);
     } else {

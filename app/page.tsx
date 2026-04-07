@@ -19,6 +19,14 @@ export default function Home() {
   const [defaultMargin, setDefaultMargin] = useState(7);
   const [recalculateTrigger, setRecalculateTrigger] = useState(0);
 
+  // 현재 로드된 세션 ID (덮어쓰기용)
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+
+  // 파일 업로드 자동 저장용 (ref → 리렌더 불필요)
+  const pendingAutoTitleRef = useRef<string | null>(null);
+  const autoSavedRef = useRef(false);
+  const [autoSaveTrigger, setAutoSaveTrigger] = useState<{ title: string; counter: number } | null>(null);
+
   // Mixpanel 데이터 수집 (저장용) — ref로 관리해 리렌더 방지
   const currentRowsRef = useRef<PriceRow[]>([]);
   const currentStatsMapRef = useRef<Record<string, SalesStats>>({});
@@ -27,13 +35,22 @@ export default function Home() {
   const [initialRows, setInitialRows] = useState<PriceRow[] | undefined>(undefined);
   const [initialStatsMap, setInitialStatsMap] = useState<Record<string, SalesStats> | undefined>(undefined);
 
-  const handleInput = (products: InputProduct[]) => {
+  const handleInput = (products: InputProduct[], fileName?: string) => {
+    if (fileName) {
+      // 파일명에서 확장자 제거해서 세션 제목으로 사용
+      pendingAutoTitleRef.current = fileName.replace(/\.[^.]+$/, '');
+      autoSavedRef.current = false;
+    } else {
+      pendingAutoTitleRef.current = null;
+    }
     setInputProducts(products);
     setShowModal(true);
     setLoading(true);
   };
 
   const handleConfirm = (refined: RefinedProduct[]) => {
+    // 신규 입력 확정 시 활성 세션 해제
+    setActiveSessionId(null);
     // 새 상품 추가 시 initialRows/initialStatsMap 초기화 (신규 fetch)
     setInitialRows(undefined);
     setInitialStatsMap(undefined);
@@ -65,7 +82,10 @@ export default function Home() {
     products: RefinedProduct[],
     savedRows?: PriceRow[],
     savedStatsMap?: Record<string, SalesStats>,
+    sessionId?: string,
   ) => {
+    setActiveSessionId(sessionId ?? null);
+    pendingAutoTitleRef.current = null; // 세션 로드 시 자동 저장 방지
     setRefinedProducts(products);
     setInitialRows(savedRows);
     setInitialStatsMap(savedStatsMap);
@@ -78,6 +98,17 @@ export default function Home() {
   const excludedProducts = refinedProducts.filter((p) => !p.finalName);
   const confirmedNames = confirmedProducts.map((p) => p.finalName!);
 
+  const handleRowsChange = useCallback((rows: PriceRow[]) => {
+    currentRowsRef.current = rows;
+    // 파일 업로드 후 최초 rows 완성 시 자동 저장
+    if (pendingAutoTitleRef.current && !autoSavedRef.current && rows.length > 0) {
+      autoSavedRef.current = true;
+      const title = pendingAutoTitleRef.current;
+      pendingAutoTitleRef.current = null;
+      setAutoSaveTrigger(prev => ({ title, counter: (prev?.counter ?? 0) + 1 }));
+    }
+  }, []);
+
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
       {/* 사이드바 */}
@@ -86,6 +117,9 @@ export default function Home() {
         currentRowsRef={currentRowsRef}
         currentStatsMapRef={currentStatsMapRef}
         onLoad={handleLoadSession}
+        activeSessionId={activeSessionId}
+        autoSaveTrigger={autoSaveTrigger}
+        onAutoSaved={(id) => setActiveSessionId(id)}
       />
 
       {/* 메인 콘텐츠 */}
@@ -121,7 +155,7 @@ export default function Home() {
                 key={`price-${sessionKey}`}
                 products={refinedProducts}
                 initialRows={initialRows}
-                onRowsChange={r => { currentRowsRef.current = r; }}
+                onRowsChange={handleRowsChange}
                 defaultMargin={defaultMargin}
                 recalculateTrigger={recalculateTrigger}
               />
