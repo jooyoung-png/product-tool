@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSalesDots } from '@/lib/mixpanel';
+import { getSalesDotsFromFile, hasPriceHistoryFile } from '@/lib/priceHistory';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -9,8 +9,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'itemName required' }, { status: 400 });
   }
 
+  if (!hasPriceHistoryFile()) {
+    return NextResponse.json({ dots: [] });
+  }
+
   try {
-    const dots = await getSalesDots(itemName);
+    const dots = getSalesDotsFromFile(itemName);
     return NextResponse.json({ dots });
   } catch (err) {
     console.error('sales-dots error:', err);
