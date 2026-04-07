@@ -8,6 +8,8 @@ import Papa from 'papaparse';
 interface Props {
   onSubmit: (products: InputProduct[]) => void;
   loading: boolean;
+  defaultMargin: number;
+  onRecalculate: (margin: number) => void;
 }
 
 // ── 헤더명 별칭 테이블 ──────────────────────────────────────────────────────────
@@ -35,11 +37,21 @@ function detectColumnIndices(headerRow: (string | number)[]): Record<string, num
   return map;
 }
 
-export default function InputSection({ onSubmit, loading }: Props) {
+export default function InputSection({ onSubmit, loading, defaultMargin, onRecalculate }: Props) {
   const [productName, setProductName] = useState('');
   const [supplyPrice, setSupplyPrice] = useState('');
   const [fileError, setFileError] = useState('');
+  const [marginInput, setMarginInput] = useState(String(defaultMargin));
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleRecalculate = () => {
+    const parsed = parseFloat(marginInput);
+    if (isNaN(parsed) || parsed < 0 || parsed > 100) {
+      alert('0~100 사이의 유효한 마진율을 입력해주세요.');
+      return;
+    }
+    onRecalculate(parsed);
+  };
 
   const handleSingle = () => {
     const name = productName.trim();
@@ -187,6 +199,30 @@ export default function InputSection({ onSubmit, loading }: Props) {
             {loading ? '처리 중...' : '조회'}
           </button>
         </div>
+      </div>
+
+      {/* 기본 도매마진률 */}
+      <div className="flex items-center gap-3 mb-6">
+        <label className="text-sm text-gray-500 whitespace-nowrap">기본 도매마진률</label>
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            value={marginInput}
+            onChange={(e) => setMarginInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleRecalculate()}
+            min={0}
+            max={100}
+            step={0.1}
+            className="w-20 border border-gray-200 rounded-lg px-3 py-2 text-sm text-right text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <span className="text-sm text-gray-400">%</span>
+        </div>
+        <button
+          onClick={handleRecalculate}
+          className="text-sm px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors font-medium"
+        >
+          재계산
+        </button>
       </div>
 
       {/* 구분선 */}

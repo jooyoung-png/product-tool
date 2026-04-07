@@ -15,6 +15,8 @@ interface Props {
   products: RefinedProduct[];
   initialRows?: PriceRow[];                    // 세션 로드 시 미리 채워진 rows
   onRowsChange?: (rows: PriceRow[]) => void;   // 저장용 콜백
+  defaultMargin?: number;                      // 기본 도매마진률 (기본값 7)
+  recalculateTrigger?: number;                 // 증가할 때마다 전체 재계산
 }
 
 // 행별 입력 중인 raw 문자열 (즉시 재계산용)
@@ -75,7 +77,7 @@ function computeRow(base: PriceRow, marginPct: number, overrideAppPrice?: number
   return { ...base, wholesaleMargin: actualMarginPct, wholesalePrice: wp, appPrice, storeProfit, dailyshotFee: fee, dailyshotFeeRate: feeRate, priceDiff };
 }
 
-export default function PriceTable({ products, initialRows, onRowsChange }: Props) {
+export default function PriceTable({ products, initialRows, onRowsChange, defaultMargin = 7, recalculateTrigger = 0 }: Props) {
   const [rows, setRows] = useState<PriceRow[]>(() => initialRows ?? []);
   const [inputs, setInputs] = useState<Record<string, RowInput>>(() => {
     const m: Record<string, RowInput> = {};
@@ -94,6 +96,30 @@ export default function PriceTable({ products, initialRows, onRowsChange }: Prop
   useEffect(() => {
     if (rows.length > 0) onRowsChange?.(rows);
   }, [rows, onRowsChange]);
+
+  // 재계산 트리거: defaultMargin으로 전체 행 재계산 (앱 판매가도 자동 재산정)
+  const prevTriggerRef = useRef(0);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+
+  useEffect(() => {
+    if (recalculateTrigger === 0 || recalculateTrigger === prevTriggerRef.current) return;
+    prevTriggerRef.current = recalculateTrigger;
+
+    const recalculated = rowsRef.current.map((row) => computeRow(row, defaultMargin));
+    setRows(recalculated);
+    setInputs((prev) => {
+      const updated = { ...prev };
+      recalculated.forEach((row) => {
+        updated[row.productName] = {
+          supplyPrice: String(row.supplyPrice),
+          margin: String(row.wholesaleMargin),
+          appPrice: String(row.appPrice),
+        };
+      });
+      return updated;
+    });
+  }, [recalculateTrigger, defaultMargin]);
 
   const fetchStats = useCallback(async (productName: string) => {
     const res = await fetch(`/api/sales-stats?itemName=${encodeURIComponent(productName)}`);
@@ -115,7 +141,7 @@ export default function PriceTable({ products, initialRows, onRowsChange }: Prop
       newProducts.map(async (p) => {
         const name = p.finalName!;
         const stats = await fetchStats(name);
-        const margin = 7;
+        const margin = defaultMargin;
         const wholesalePrice = calcWholesalePrice(p.supplyPrice, margin / 100);
 
         const recommendedPrice: number | '데이터 없음' = stats.noData

@@ -16,6 +16,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [retryProduct, setRetryProduct] = useState<InputProduct | null>(null);
   const [sessionKey, setSessionKey] = useState(0);
+  const [defaultMargin, setDefaultMargin] = useState(7);
+  const [recalculateTrigger, setRecalculateTrigger] = useState(0);
 
   // Mixpanel 데이터 수집 (저장용) — ref로 관리해 리렌더 방지
   const currentRowsRef = useRef<PriceRow[]>([]);
@@ -100,7 +102,15 @@ export default function Home() {
 
           {/* 입력 섹션 */}
           <div className="mb-8">
-            <InputSection onSubmit={handleInput} loading={loading} />
+            <InputSection
+              onSubmit={handleInput}
+              loading={loading}
+              defaultMargin={defaultMargin}
+              onRecalculate={(margin) => {
+                setDefaultMargin(margin);
+                setRecalculateTrigger((t) => t + 1);
+              }}
+            />
           </div>
 
           {/* 결과 섹션 */}
@@ -112,6 +122,8 @@ export default function Home() {
                 products={refinedProducts}
                 initialRows={initialRows}
                 onRowsChange={r => { currentRowsRef.current = r; }}
+                defaultMargin={defaultMargin}
+                recalculateTrigger={recalculateTrigger}
               />
 
               {/* Mixpanel 판매 데이터 */}
