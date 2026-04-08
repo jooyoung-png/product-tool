@@ -49,8 +49,9 @@ function applyDSCap(appPrice: number, wholesalePrice: number, storeProfit: numbe
   // DS 수수료율 13.3% 상한 초과시 도매가 상향 조정
   if (feeRate > 0.133) {
     wp = appPrice - storeProfit - appPrice * 0.133;
-    fee = calcDailyshotFee(appPrice, wp, storeProfit);
-    feeRate = calcDailyshotFeeRate(fee, appPrice);
+    // 부동소수점 오차 방지: fee/feeRate를 역산하지 않고 직접 고정
+    fee = appPrice * 0.133;
+    feeRate = 0.133;
     // 상향된 도매가로 실제 도매수익률 역산: margin = 1 - (공급가 * 1.1) / 도매판매가
     effectiveMarginPct = Math.round((1 - (supplyPrice * 1.1) / wp) * 1000) / 10;
   }
@@ -259,6 +260,7 @@ export default function PriceTable({ products, initialRows, onRowsChange, onDele
       delete next[productName];
       return next;
     });
+    fetchedNamesRef.current.delete(productName); // 재조회 가능하도록 캐시에서도 제거
     onDeleteRow?.(productName);
   };
 
