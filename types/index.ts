@@ -14,6 +14,7 @@ export interface InputProduct {
 export interface WholesaleItem {
   id: number;
   name: string;
+  distributor: string;
   status: string;
   supplyPrice: number;
   wholesalePrice: number;

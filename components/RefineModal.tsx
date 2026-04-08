@@ -293,6 +293,7 @@ export default function RefineModal({ products, onConfirm, onClose }: Props) {
                                 : 'bg-gray-100 text-gray-400'
                             }`}>{c.wholesale.status}</span>
                           </span>
+                          <span>도매사 {c.wholesale.distributor}</span>
                           <span>공급가 {c.wholesale.supplyPrice.toLocaleString()}원</span>
                           <span>도매 판매가 {c.wholesale.wholesalePrice.toLocaleString()}원</span>
                           <span>도매 마진률 {calcWholesaleMargin(c.wholesale.supplyPrice, c.wholesale.wholesalePrice)}</span>

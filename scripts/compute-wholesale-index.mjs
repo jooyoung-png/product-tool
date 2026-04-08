@@ -49,9 +49,9 @@ async function main() {
   });
 
   // Column indices (from header analysis):
-  // 0: 유통사 상품 ID, 3: 상품 이름, 7: 유통사 이름, 8: code,
+  // 0: 유통사 상품 ID, 1: 상품 ID, 3: 상품 이름, 7: 유통사 이름, 8: code,
   // 9: status, 14: 공급가(vat별도), 16: 도매 판매가(vat포함), 19: 판매가
-  const IDX = { id: 0, name: 3, distributor: 7, code: 8, status: 9, supply: 14, wholesale: 16, app: 19 };
+  const IDX = { id: 1, name: 3, distributor: 7, code: 8, status: 9, supply: 14, wholesale: 16, app: 19 };
 
   const byCode = {};
   let totalRows = 0;
@@ -89,7 +89,7 @@ async function main() {
     const appPrice = parseInt((fields[IDX.app] || '0').replace(/,/g, ''), 10) || 0;
 
     if (!byCode[code]) byCode[code] = [];
-    byCode[code].push({ id, name, status, supplyPrice, wholesalePrice, appPrice });
+    byCode[code].push({ id, name, distributor, status, supplyPrice, wholesalePrice, appPrice });
     totalRows++;
   }
 
