@@ -13,7 +13,7 @@ interface Props {
 }
 
 // ── 헤더명 별칭 테이블 ──────────────────────────────────────────────────────────
-const HEADER_ALIASES: Record<keyof Omit<InputProduct, 'name' | 'supplyPrice'> | 'name' | 'supplyPrice', string[]> = {
+const HEADER_ALIASES: Record<keyof Omit<InputProduct, 'wholesaleCode'>, string[]> = {
   name:          ['상품명', '품명', 'item_name', 'item name', '상품 명'],
   supplyPrice:   ['공급가', '공급 가격', '공급가(원)', 'supply_price', 'supply price'],
   bottlesPerBox: ['박스 내 병 단위', '박스단위', '병수', 'bottles_per_box', '박스내병단위'],
@@ -40,6 +40,7 @@ function detectColumnIndices(headerRow: (string | number)[]): Record<string, num
 export default function InputSection({ onSubmit, loading, defaultMargin, onRecalculate }: Props) {
   const [productName, setProductName] = useState('');
   const [supplyPrice, setSupplyPrice] = useState('');
+  const [wholesaleCode, setWholesaleCode] = useState('');
   const [fileError, setFileError] = useState('');
   const [marginInput, setMarginInput] = useState(String(defaultMargin));
   const fileRef = useRef<HTMLInputElement>(null);
@@ -60,7 +61,8 @@ export default function InputSection({ onSubmit, loading, defaultMargin, onRecal
       alert('상품명과 공급가를 입력해주세요.');
       return;
     }
-    onSubmit([{ name, supplyPrice: price }]);
+    const code = wholesaleCode.trim() || undefined;
+    onSubmit([{ name, supplyPrice: price, wholesaleCode: code }]);
   };
 
   const extractProducts = (rows: (string | number)[][]): InputProduct[] | null => {
@@ -186,6 +188,17 @@ export default function InputSection({ onSubmit, loading, defaultMargin, onRecal
             value={supplyPrice}
             onChange={(e) => setSupplyPrice(e.target.value)}
             placeholder="예) 150000"
+            className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onKeyDown={(e) => e.key === 'Enter' && handleSingle()}
+          />
+        </div>
+        <div className="w-32">
+          <label className="block text-sm text-gray-500 mb-1">도매사 코드 <span className="text-gray-300">(선택)</span></label>
+          <input
+            type="text"
+            value={wholesaleCode}
+            onChange={(e) => setWholesaleCode(e.target.value)}
+            placeholder="예) 02419"
             className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             onKeyDown={(e) => e.key === 'Enter' && handleSingle()}
           />

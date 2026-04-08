@@ -7,11 +7,23 @@ export interface InputProduct {
   stock?: number;
   code?: string;
   volume?: string;
+  // 도매사 코드 검색용 (단건 입력에서만 채워짐)
+  wholesaleCode?: string;
+}
+
+export interface WholesaleItem {
+  id: number;
+  name: string;
+  status: string;
+  supplyPrice: number;
+  wholesalePrice: number;
+  appPrice: number;
 }
 
 export interface NameCandidate {
   name: string;
   matchRate: number;
+  wholesale?: WholesaleItem; // 도매사 코드 검색 결과일 때만 채워짐
 }
 
 export interface RefinedProduct {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { InputProduct, RefinedProduct, NameCandidate } from '@/types';
+import { InputProduct, RefinedProduct, NameCandidate, WholesaleItem } from '@/types';
 
 interface Props {
   products: InputProduct[];
@@ -18,6 +18,7 @@ interface RefinedState {
   customName: string;
   loading: boolean;
   error: string;
+  wholesaleCode?: string;    // 도매사 코드 (있으면 wholesale 검색 결과 표시)
   // 선택 필드 pass-through
   bottlesPerBox?: number;
   purpose?: string;
@@ -36,6 +37,34 @@ async function fetchCandidates(name: string): Promise<NameCandidate[]> {
   return data.candidates || [];
 }
 
+async function fetchWholesaleCandidates(wholesaleCode: string): Promise<NameCandidate[]> {
+  const r = await fetch('/api/wholesale-search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ wholesaleCode }),
+  });
+  const data = await r.json();
+  const items: WholesaleItem[] = data.items || [];
+  return items.map((item) => ({
+    name: item.name,
+    matchRate: 100,
+    wholesale: item,
+  }));
+}
+
+function calcWholesaleMargin(supplyPrice: number, wholesalePrice: number): string {
+  if (!wholesalePrice) return '-';
+  const rate = (1 - (supplyPrice * 1.1) / wholesalePrice) * 100;
+  return rate.toFixed(1) + '%';
+}
+
+function calcDsCommissionRate(appPrice: number, wholesalePrice: number): string {
+  if (!appPrice || !wholesalePrice) return '-';
+  const fee = appPrice - wholesalePrice - Math.min(appPrice * 0.07, 10000);
+  const rate = (fee / appPrice) * 100;
+  return rate.toFixed(1) + '%';
+}
+
 export default function RefineModal({ products, onConfirm, onClose }: Props) {
   const [states, setStates] = useState<RefinedState[]>([]);
   const [confirming, setConfirming] = useState(false);
@@ -50,6 +79,7 @@ export default function RefineModal({ products, onConfirm, onClose }: Props) {
       customName: '',
       loading: true,
       error: '',
+      wholesaleCode: p.wholesaleCode,
       bottlesPerBox: p.bottlesPerBox,
       purpose: p.purpose,
       stock: p.stock,
@@ -59,7 +89,11 @@ export default function RefineModal({ products, onConfirm, onClose }: Props) {
     setStates(initial);
 
     products.forEach((p, idx) => {
-      fetchCandidates(p.name)
+      const fetchFn = p.wholesaleCode
+        ? fetchWholesaleCandidates(p.wholesaleCode)
+        : fetchCandidates(p.name);
+
+      fetchFn
         .then((candidates) => {
           setStates((prev) => {
             const next = [...prev];
@@ -93,10 +127,14 @@ export default function RefineModal({ products, onConfirm, onClose }: Props) {
   };
 
   const handleResearch = (idx: number) => {
-    const name = states[idx].editedName.trim();
-    if (!name) return;
+    const s = states[idx];
+    const name = s.editedName.trim();
+    if (!name && !s.wholesaleCode) return;
     updateState(idx, { loading: true, candidates: [], selectedName: null, customName: '', error: '' });
-    fetchCandidates(name)
+    const fetchFn = s.wholesaleCode
+      ? fetchWholesaleCandidates(s.wholesaleCode)
+      : fetchCandidates(name);
+    fetchFn
       .then((candidates) => {
         setStates((prev) => {
           const next = [...prev];
@@ -188,7 +226,7 @@ export default function RefineModal({ products, onConfirm, onClose }: Props) {
               {s.loading && (
                 <div className="flex items-center gap-2 text-sm text-gray-400">
                   <span className="animate-spin inline-block w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full" />
-                  Claude AI가 상품명을 분석 중입니다...
+                  {s.wholesaleCode ? '도매사 코드로 검색 중입니다...' : 'Claude AI가 상품명을 분석 중입니다...'}
                 </div>
               )}
 
@@ -198,36 +236,70 @@ export default function RefineModal({ products, onConfirm, onClose }: Props) {
 
               {!s.loading && !s.error && s.candidates.length > 0 && (
                 <div className="space-y-2 mb-3">
-                  <p className="text-xs text-gray-500 mb-1">후보 상품명</p>
-                  {s.candidates.map((c) => (
+                  <p className="text-xs text-gray-500 mb-1">
+                    {s.wholesaleCode ? `도매사 코드 ${s.wholesaleCode} 검색 결과` : '후보 상품명'}
+                  </p>
+                  {s.candidates.map((c, ci) => (
                     <label
-                      key={c.name}
-                      className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                      key={`${c.name}-${ci}`}
+                      className={`flex flex-col gap-1 p-3 rounded-lg border cursor-pointer transition-colors ${
                         s.selectedName === c.name
                           ? 'border-blue-400 bg-blue-50'
                           : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
                       }`}
                     >
-                      <input
-                        type="checkbox"
-                        checked={s.selectedName === c.name}
-                        onChange={(e) => {
-                          updateState(idx, { selectedName: e.target.checked ? c.name : null });
-                        }}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="flex-1 text-sm text-gray-800">{c.name}</span>
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${
-                          c.matchRate >= 90
-                            ? 'bg-green-100 text-green-600'
-                            : c.matchRate >= 70
-                            ? 'bg-yellow-100 text-yellow-600'
-                            : 'bg-red-100 text-red-500'
-                        }`}
-                      >
-                        일치율 {c.matchRate}%
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          checked={s.selectedName === c.name}
+                          onChange={(e) => {
+                            updateState(idx, { selectedName: e.target.checked ? c.name : null });
+                          }}
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="flex-1 text-sm text-gray-800 font-medium">{c.name}</span>
+                        {!s.wholesaleCode && (
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full ${
+                              c.matchRate >= 90
+                                ? 'bg-green-100 text-green-600'
+                                : c.matchRate >= 70
+                                ? 'bg-yellow-100 text-yellow-600'
+                                : 'bg-red-100 text-red-500'
+                            }`}
+                          >
+                            일치율 {c.matchRate}%
+                          </span>
+                        )}
+                      </div>
+                      {c.wholesale && (
+                        <div className="ml-7 grid grid-cols-2 gap-x-6 gap-y-0.5 text-xs text-gray-500">
+                          <span>
+                            ID:{' '}
+                            <a
+                              href={`https://dailyshot.co/admin/smartorder_reservation/product/${c.wholesale.id}/change`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-blue-500 hover:underline"
+                            >
+                              {c.wholesale.id}
+                            </a>
+                            <span className={`ml-2 px-1.5 py-0.5 rounded text-xs ${
+                              c.wholesale.status === '판매 중'
+                                ? 'bg-green-100 text-green-600'
+                                : c.wholesale.status === '품절'
+                                ? 'bg-yellow-100 text-yellow-600'
+                                : 'bg-gray-100 text-gray-400'
+                            }`}>{c.wholesale.status}</span>
+                          </span>
+                          <span>공급가 {c.wholesale.supplyPrice.toLocaleString()}원</span>
+                          <span>도매 판매가 {c.wholesale.wholesalePrice.toLocaleString()}원</span>
+                          <span>도매 마진률 {calcWholesaleMargin(c.wholesale.supplyPrice, c.wholesale.wholesalePrice)}</span>
+                          <span>앱 판매가 {c.wholesale.appPrice.toLocaleString()}원</span>
+                          <span>DS 수수료율 {calcDsCommissionRate(c.wholesale.appPrice, c.wholesale.wholesalePrice)}</span>
+                        </div>
+                      )}
                     </label>
                   ))}
                 </div>
