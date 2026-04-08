@@ -98,6 +98,10 @@ export default function Home() {
   const excludedProducts = refinedProducts.filter((p) => !p.finalName);
   const confirmedNames = confirmedProducts.map((p) => p.finalName!);
 
+  const handleDeleteRow = useCallback((productName: string) => {
+    setRefinedProducts((prev) => prev.filter((p) => p.finalName !== productName));
+  }, []);
+
   const handleRowsChange = useCallback((rows: PriceRow[]) => {
     currentRowsRef.current = rows;
     // 파일 업로드 후 최초 rows 완성 시 자동 저장
@@ -156,6 +160,7 @@ export default function Home() {
                 products={refinedProducts}
                 initialRows={initialRows}
                 onRowsChange={handleRowsChange}
+                onDeleteRow={handleDeleteRow}
                 defaultMargin={defaultMargin}
                 recalculateTrigger={recalculateTrigger}
               />

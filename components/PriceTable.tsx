@@ -15,6 +15,7 @@ interface Props {
   products: RefinedProduct[];
   initialRows?: PriceRow[];                    // 세션 로드 시 미리 채워진 rows
   onRowsChange?: (rows: PriceRow[]) => void;   // 저장용 콜백
+  onDeleteRow?: (productName: string) => void; // 행 삭제 시 부모 동기화
   defaultMargin?: number;                      // 기본 도매마진률 (기본값 7)
   recalculateTrigger?: number;                 // 증가할 때마다 전체 재계산
 }
@@ -56,8 +57,9 @@ function applyDSCap(appPrice: number, wholesalePrice: number, storeProfit: numbe
   return { wholesalePrice: wp, fee, feeRate, effectiveMarginPct };
 }
 
-function computeRow(base: PriceRow, marginPct: number, overrideAppPrice?: number): PriceRow {
-  let wholesalePrice = calcWholesalePrice(base.supplyPrice, marginPct / 100);
+// applyCap: 최초 계산 시에만 true — 수동 수정 시에는 cap 미적용
+function computeRow(base: PriceRow, marginPct: number, overrideAppPrice?: number, applyCap = false): PriceRow {
+  const wholesalePrice = calcWholesalePrice(base.supplyPrice, marginPct / 100);
 
   const appPrice = overrideAppPrice !== undefined
     ? overrideAppPrice
@@ -67,8 +69,18 @@ function computeRow(base: PriceRow, marginPct: number, overrideAppPrice?: number
       );
 
   const storeProfit = calcStoreProfit(appPrice);
-  const { wholesalePrice: wp, fee, feeRate, effectiveMarginPct } = applyDSCap(appPrice, wholesalePrice, storeProfit, base.supplyPrice);
-  const actualMarginPct = effectiveMarginPct !== null ? effectiveMarginPct : marginPct;
+  let wp = wholesalePrice;
+  let fee = calcDailyshotFee(appPrice, wp, storeProfit);
+  let feeRate = calcDailyshotFeeRate(fee, appPrice);
+  let actualMarginPct = marginPct;
+
+  if (applyCap && feeRate > 0.133) {
+    const capped = applyDSCap(appPrice, wholesalePrice, storeProfit, base.supplyPrice);
+    wp = capped.wholesalePrice;
+    fee = capped.fee;
+    feeRate = capped.feeRate;
+    actualMarginPct = capped.effectiveMarginPct !== null ? capped.effectiveMarginPct : marginPct;
+  }
 
   const priceDiff = base.recommendedPrice !== '데이터 없음'
     ? appPrice - (base.recommendedPrice as number)
@@ -77,7 +89,7 @@ function computeRow(base: PriceRow, marginPct: number, overrideAppPrice?: number
   return { ...base, wholesaleMargin: actualMarginPct, wholesalePrice: wp, appPrice, storeProfit, dailyshotFee: fee, dailyshotFeeRate: feeRate, priceDiff };
 }
 
-export default function PriceTable({ products, initialRows, onRowsChange, defaultMargin = 7, recalculateTrigger = 0 }: Props) {
+export default function PriceTable({ products, initialRows, onRowsChange, onDeleteRow, defaultMargin = 7, recalculateTrigger = 0 }: Props) {
   const [rows, setRows] = useState<PriceRow[]>(() => initialRows ?? []);
   const [inputs, setInputs] = useState<Record<string, RowInput>>(() => {
     const m: Record<string, RowInput> = {};
@@ -205,15 +217,7 @@ export default function PriceTable({ products, initialRows, onRowsChange, defaul
         if (row.productName !== productName) return row;
         const currentAppPrice = parseInt(inputs[productName]?.appPrice?.replace(/,/g, '') ?? '', 10);
         const overrideApp = !isNaN(currentAppPrice) && currentAppPrice > 0 ? currentAppPrice : undefined;
-        const updated = computeRow(row, marginPct, overrideApp);
-        // cap 적용 시 실제 도매수익률 & 앱 판매가를 input에 반영
-        const effectiveMarginStr = String(updated.wholesaleMargin);
-        if (overrideApp === undefined) {
-          setInputs((prev2) => ({ ...prev2, [productName]: { ...prev2[productName], margin: effectiveMarginStr, appPrice: String(updated.appPrice) } }));
-        } else if (updated.wholesaleMargin !== marginPct) {
-          setInputs((prev2) => ({ ...prev2, [productName]: { ...prev2[productName], margin: effectiveMarginStr } }));
-        }
-        return updated;
+        return computeRow(row, marginPct, overrideApp);
       })
     );
   };
@@ -255,6 +259,7 @@ export default function PriceTable({ products, initialRows, onRowsChange, defaul
       delete next[productName];
       return next;
     });
+    onDeleteRow?.(productName);
   };
 
   if (rows.length === 0 && isLoading) {
@@ -411,7 +416,13 @@ export default function PriceTable({ products, initialRows, onRowsChange, defaul
                   <td className="py-3 px-3 text-right text-gray-700">{fmt(Math.round(row.wholesalePrice))}</td>
                   <td className="py-3 px-3 text-right text-gray-700">{fmt(row.storeProfit)}</td>
                   <td className="py-3 px-3 text-right text-gray-700">{fmt(Math.round(row.dailyshotFee))}</td>
-                  <td className={`py-3 px-3 text-right font-medium ${row.dailyshotFeeRate >= 0.08 ? 'text-green-600' : 'text-red-500'}`}>
+                  <td className={`py-3 px-3 text-right font-medium ${
+                    row.dailyshotFeeRate > 0.133
+                      ? 'text-red-500'
+                      : row.dailyshotFeeRate >= 0.08
+                      ? 'text-green-600'
+                      : 'text-red-500'
+                  }`}>
                     {fmtRate(row.dailyshotFeeRate)}
                   </td>
 
