@@ -19,6 +19,9 @@ export default function ProductRefBanner() {
   const [phDays, setPhDays] = useState<number | null>(null);
   const [phMeta, setPhMeta] = useState<Meta | null>(null);
 
+  const [whDays, setWhDays] = useState<number | null>(null);
+  const [whMeta, setWhMeta] = useState<{ generatedAt: string } | null>(null);
+
   const fetchMeta = () => {
     fetch('/api/product-ref-meta')
       .then((r) => r.json())
@@ -37,9 +40,19 @@ export default function ProductRefBanner() {
       });
   };
 
+  const fetchWhMeta = () => {
+    fetch('/api/wholesale-meta')
+      .then((r) => r.json())
+      .then((data) => {
+        setWhDays(data.daysSinceUpdate);
+        setWhMeta(data.meta);
+      });
+  };
+
   useEffect(() => {
     fetchMeta();
     fetchPhMeta();
+    fetchWhMeta();
   }, []);
 
   const handleUpload = async (file: File) => {
@@ -115,6 +128,16 @@ export default function ProductRefBanner() {
           {phMeta
             ? `과거 판매가 이력: ${phMeta.fromDate ?? '?'} ~ ${phMeta.toDate ?? '?'} · 업데이트 ${phDays === 0 ? '오늘' : `${phDays}일 전`}`
             : '과거 판매가 이력 없음 — node scripts/compute-price-stats.mjs 실행 후 git push'}
+        </p>
+      </div>
+
+      {/* 도매사 상품 배포 */}
+      <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5">
+        <span className="text-gray-400 text-sm">🏭</span>
+        <p className="text-xs text-gray-500 flex-1">
+          {whMeta
+            ? `도매사 상품 배포: ${whMeta.generatedAt} · 업데이트 ${whDays === 0 ? '오늘' : `${whDays}일 전`}`
+            : '도매사 상품 배포 파일 없음 — node scripts/compute-wholesale-index.mjs 실행 후 git push'}
         </p>
       </div>
 

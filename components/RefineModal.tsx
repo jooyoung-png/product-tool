@@ -239,16 +239,94 @@ export default function RefineModal({ products, onConfirm, onClose }: Props) {
                   <p className="text-xs text-gray-500 mb-1">
                     {s.wholesaleCode ? `도매사 코드 ${s.wholesaleCode} 검색 결과` : '후보 상품명'}
                   </p>
-                  {s.candidates.map((c, ci) => (
-                    <label
-                      key={`${c.name}-${ci}`}
-                      className={`flex flex-col gap-1 p-3 rounded-lg border cursor-pointer transition-colors ${
-                        s.selectedName === c.name
-                          ? 'border-blue-400 bg-blue-50'
-                          : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
+
+                  {s.wholesaleCode ? (
+                    // ── 도매사 코드 검색 결과: 상품명 기준 그룹핑 ──
+                    (() => {
+                      // 상품명 기준으로 그룹핑 (순서 유지)
+                      const groups: { name: string; items: typeof s.candidates }[] = [];
+                      s.candidates.forEach((c) => {
+                        const g = groups.find((g) => g.name === c.name);
+                        if (g) g.items.push(c);
+                        else groups.push({ name: c.name, items: [c] });
+                      });
+                      return groups.map((g) => {
+                        const distributor = g.items[0].wholesale?.distributor ?? '';
+                        return (
+                          <label
+                            key={g.name}
+                            className={`flex flex-col gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${
+                              s.selectedName === g.name
+                                ? 'border-blue-400 bg-blue-50'
+                                : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
+                            }`}
+                          >
+                            {/* 상품명 + 도매사 배지 */}
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={s.selectedName === g.name}
+                                onChange={(e) => {
+                                  updateState(idx, { selectedName: e.target.checked ? g.name : null });
+                                }}
+                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="flex-1 text-sm text-gray-800 font-medium">{g.name}</span>
+                              {distributor && (
+                                <span className="text-xs px-2 py-0.5 rounded border border-gray-200 bg-white text-gray-500 whitespace-nowrap">
+                                  {distributor}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* ID별 데이터 박스 */}
+                            <div className="ml-6 space-y-1.5">
+                              {g.items.map((c) => c.wholesale && (
+                                <div key={c.wholesale.id} className="rounded-lg border border-gray-100 bg-white px-3 py-2">
+                                  {/* 박스 제목: ID */}
+                                  <div className="flex items-center gap-2 mb-1.5">
+                                    <a
+                                      href={`https://dailyshot.co/admin/smartorder_reservation/product/${c.wholesale.id}/change`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="text-xs font-semibold text-blue-500 hover:underline"
+                                    >
+                                      ID {c.wholesale.id}
+                                    </a>
+                                    <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                      c.wholesale.status === '판매 중'
+                                        ? 'bg-green-100 text-green-600'
+                                        : c.wholesale.status === '품절'
+                                        ? 'bg-yellow-100 text-yellow-600'
+                                        : 'bg-gray-100 text-gray-400'
+                                    }`}>{c.wholesale.status}</span>
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-x-4 gap-y-0.5 text-xs text-gray-500">
+                                    <span>공급가 {c.wholesale.supplyPrice.toLocaleString()}원</span>
+                                    <span>도매 판매가 {c.wholesale.wholesalePrice.toLocaleString()}원</span>
+                                    <span>도매 마진률 {calcWholesaleMargin(c.wholesale.supplyPrice, c.wholesale.wholesalePrice)}</span>
+                                    <span>앱 판매가 {c.wholesale.appPrice.toLocaleString()}원</span>
+                                    <span>DS 수수료율 {calcDsCommissionRate(c.wholesale.appPrice, c.wholesale.wholesalePrice)}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </label>
+                        );
+                      });
+                    })()
+                  ) : (
+                    // ── 일반 상품명 검색 결과 ──
+                    s.candidates.map((c, ci) => (
+                      <label
+                        key={`${c.name}-${ci}`}
+                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                          s.selectedName === c.name
+                            ? 'border-blue-400 bg-blue-50'
+                            : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
                         <input
                           type="checkbox"
                           checked={s.selectedName === c.name}
@@ -257,52 +335,21 @@ export default function RefineModal({ products, onConfirm, onClose }: Props) {
                           }}
                           className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                         />
-                        <span className="flex-1 text-sm text-gray-800 font-medium">{c.name}</span>
-                        {!s.wholesaleCode && (
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded-full ${
-                              c.matchRate >= 90
-                                ? 'bg-green-100 text-green-600'
-                                : c.matchRate >= 70
-                                ? 'bg-yellow-100 text-yellow-600'
-                                : 'bg-red-100 text-red-500'
-                            }`}
-                          >
-                            일치율 {c.matchRate}%
-                          </span>
-                        )}
-                      </div>
-                      {c.wholesale && (
-                        <div className="ml-7 grid grid-cols-2 gap-x-6 gap-y-0.5 text-xs text-gray-500">
-                          <span>
-                            ID:{' '}
-                            <a
-                              href={`https://dailyshot.co/admin/smartorder_reservation/product/${c.wholesale.id}/change`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-blue-500 hover:underline"
-                            >
-                              {c.wholesale.id}
-                            </a>
-                            <span className={`ml-2 px-1.5 py-0.5 rounded text-xs ${
-                              c.wholesale.status === '판매 중'
-                                ? 'bg-green-100 text-green-600'
-                                : c.wholesale.status === '품절'
-                                ? 'bg-yellow-100 text-yellow-600'
-                                : 'bg-gray-100 text-gray-400'
-                            }`}>{c.wholesale.status}</span>
-                          </span>
-                          <span>도매사 {c.wholesale.distributor}</span>
-                          <span>공급가 {c.wholesale.supplyPrice.toLocaleString()}원</span>
-                          <span>도매 판매가 {c.wholesale.wholesalePrice.toLocaleString()}원</span>
-                          <span>도매 마진률 {calcWholesaleMargin(c.wholesale.supplyPrice, c.wholesale.wholesalePrice)}</span>
-                          <span>앱 판매가 {c.wholesale.appPrice.toLocaleString()}원</span>
-                          <span>DS 수수료율 {calcDsCommissionRate(c.wholesale.appPrice, c.wholesale.wholesalePrice)}</span>
-                        </div>
-                      )}
-                    </label>
-                  ))}
+                        <span className="flex-1 text-sm text-gray-800">{c.name}</span>
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full ${
+                            c.matchRate >= 90
+                              ? 'bg-green-100 text-green-600'
+                              : c.matchRate >= 70
+                              ? 'bg-yellow-100 text-yellow-600'
+                              : 'bg-red-100 text-red-500'
+                          }`}
+                        >
+                          일치율 {c.matchRate}%
+                        </span>
+                      </label>
+                    ))
+                  )}
                 </div>
               )}
 
