@@ -16,7 +16,7 @@ interface Props {
   initialRows?: PriceRow[];                    // 세션 로드 시 미리 채워진 rows
   onRowsChange?: (rows: PriceRow[]) => void;   // 저장용 콜백
   onDeleteRow?: (productName: string) => void; // 행 삭제 시 부모 동기화
-  defaultMargin?: number;                      // 기본 도매마진률 (기본값 7)
+  defaultMargin?: number;                      // 기본 도매마진률 (기본값 10)
   recalculateTrigger?: number;                 // 증가할 때마다 전체 재계산
 }
 
@@ -90,7 +90,7 @@ function computeRow(base: PriceRow, marginPct: number, overrideAppPrice?: number
   return { ...base, wholesaleMargin: actualMarginPct, wholesalePrice: wp, appPrice, storeProfit, dailyshotFee: fee, dailyshotFeeRate: feeRate, priceDiff };
 }
 
-export default function PriceTable({ products, initialRows, onRowsChange, onDeleteRow, defaultMargin = 7, recalculateTrigger = 0 }: Props) {
+export default function PriceTable({ products, initialRows, onRowsChange, onDeleteRow, defaultMargin = 10, recalculateTrigger = 0 }: Props) {
   const [rows, setRows] = useState<PriceRow[]>(() => initialRows ?? []);
   const [inputs, setInputs] = useState<Record<string, RowInput>>(() => {
     const m: Record<string, RowInput> = {};

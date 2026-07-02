@@ -16,7 +16,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [retryProduct, setRetryProduct] = useState<InputProduct | null>(null);
   const [sessionKey, setSessionKey] = useState(0);
-  const [defaultMargin, setDefaultMargin] = useState(7);
+  const [defaultMargin, setDefaultMargin] = useState(10);
   const [recalculateTrigger, setRecalculateTrigger] = useState(0);
 
   // 현재 로드된 세션 ID (덮어쓰기용)
