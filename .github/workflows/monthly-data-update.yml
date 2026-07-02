@@ -31,11 +31,18 @@ jobs:
           node scripts/export-mixpanel.mjs data/price_history.csv
           node scripts/compute-price-stats.mjs data/price_history.csv
 
+      - name: 도매사 상품 배포 백데이터 갱신
+        env:
+          TOPPRODUCT_SESSION_ID: ${{ secrets.TOPPRODUCT_SESSION_ID }}
+        run: |
+          node scripts/export-product-distribution.mjs
+          node scripts/compute-wholesale-index.mjs data/product_distribution.csv
+
       - name: 변경사항 커밋 & 푸시
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/products.csv data/meta.json data/price_stats.json
+          git add data/products.csv data/meta.json data/price_stats.json data/wholesale_index.json
           if git diff --cached --quiet; then
             echo "변경사항 없음 — 커밋 스킵"
           else

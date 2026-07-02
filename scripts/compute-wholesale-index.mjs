@@ -5,8 +5,23 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CSV_PATH = path.join('C:', 'Users', 'jca65', 'Desktop', 'raw data', 'ProductDistribution-2026-04-08.csv');
-const OUT_PATH = path.join(__dirname, '..', 'data', 'wholesale_index.json');
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const CSV_PATH = process.argv[2]
+  ? path.resolve(process.argv[2])
+  : path.join(DATA_DIR, 'product_distribution.csv');
+const OUT_PATH = path.join(DATA_DIR, 'wholesale_index.json');
+
+// 기대 헤더: 상품 ID,상품 이름,유통사 이름,code,status,공급가(vat별도),도매 판매가(vat포함),판매가
+const HEADER_MAP = {
+  id: '상품 ID',
+  name: '상품 이름',
+  distributor: '유통사 이름',
+  code: 'code',
+  status: 'status',
+  supply: '공급가(vat별도)',
+  wholesale: '도매 판매가(vat포함)',
+  app: '판매가',
+};
 
 // CSV 행 파싱 (따옴표 처리)
 function parseCsvLine(line) {
@@ -48,20 +63,22 @@ async function main() {
     crlfDelay: Infinity,
   });
 
-  // Column indices (from header analysis):
-  // 0: 유통사 상품 ID, 1: 상품 ID, 3: 상품 이름, 7: 유통사 이름, 8: code,
-  // 9: status, 14: 공급가(vat별도), 16: 도매 판매가(vat포함), 19: 판매가
-  const IDX = { id: 1, name: 3, distributor: 7, code: 8, status: 9, supply: 14, wholesale: 16, app: 19 };
-
   const byCode = {};
   let totalRows = 0;
   let skippedRows = 0;
-  let headerSkipped = false;
+  let IDX = null;
 
   for await (const line of rl) {
-    // Skip BOM + header
-    if (!headerSkipped) {
-      headerSkipped = true;
+    if (!IDX) {
+      const header = parseCsvLine(line.replace(/^﻿/, '').trim());
+      IDX = {};
+      for (const [key, label] of Object.entries(HEADER_MAP)) {
+        IDX[key] = header.indexOf(label);
+      }
+      const missing = Object.entries(IDX).filter(([, i]) => i === -1).map(([k]) => k);
+      if (missing.length > 0) {
+        throw new Error(`CSV 헤더에서 컬럼을 찾지 못했습니다: ${missing.join(', ')} (헤더: ${header.join(',')})`);
+      }
       continue;
     }
     if (!line.trim()) continue;

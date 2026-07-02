@@ -43,4 +43,5 @@ next-env.d.ts
 # 대용량 원본 파일 (로컬 전용)
 /data/price_history.csv
 /mixpanel_export_*.csv
-# price_stats.json 은 커밋 대상 (Vercel 배포에 포함)
+/data/product_distribution.csv
+# price_stats.json, wholesale_index.json 은 커밋 대상 (Vercel 배포에 포함)
