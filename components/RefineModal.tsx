@@ -27,11 +27,11 @@ interface RefinedState {
   volume?: string;
 }
 
-async function fetchCandidates(name: string): Promise<NameCandidate[]> {
+async function fetchCandidates(name: string, volume?: string): Promise<NameCandidate[]> {
   const r = await fetch('/api/refine-name', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ productName: name }),
+    body: JSON.stringify({ productName: name, volume }),
   });
   const data = await r.json();
   return data.candidates || [];
@@ -91,7 +91,7 @@ export default function RefineModal({ products, onConfirm, onClose }: Props) {
     products.forEach((p, idx) => {
       const fetchFn = p.wholesaleCode
         ? fetchWholesaleCandidates(p.wholesaleCode)
-        : fetchCandidates(p.name);
+        : fetchCandidates(p.name, p.volume);
 
       fetchFn
         .then((candidates) => {
@@ -133,7 +133,7 @@ export default function RefineModal({ products, onConfirm, onClose }: Props) {
     updateState(idx, { loading: true, candidates: [], selectedName: null, customName: '', error: '' });
     const fetchFn = s.wholesaleCode
       ? fetchWholesaleCandidates(s.wholesaleCode)
-      : fetchCandidates(name);
+      : fetchCandidates(name, s.volume);
     fetchFn
       .then((candidates) => {
         setStates((prev) => {

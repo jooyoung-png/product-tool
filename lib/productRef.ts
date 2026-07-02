@@ -55,6 +55,29 @@ interface ScoredName {
   matchRate: number;
 }
 
+/** "750", "750ml", "1.75L", "1.75리터" 등에서 용량을 ml 단위로 추출 (여러 개 가능) */
+function extractVolumesMl(text: string): number[] {
+  const results: number[] = [];
+  const re = /(\d+(?:\.\d+)?)\s*(ml|㎖|l|리터)?/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const num = parseFloat(m[1]);
+    if (!Number.isFinite(num) || num <= 0) continue;
+    const unit = (m[2] || '').toLowerCase();
+    // 단위 없이 숫자만 있는 경우, 병 용량으로 보기 애매한 값(연도/도수 등)은 제외
+    if (!unit && (num < 50 || num > 5000)) continue;
+    const ml = unit === 'l' || unit === '리터' ? num * 1000 : num;
+    results.push(ml);
+  }
+  return results;
+}
+
+/** 사용자가 입력한 용량값(예: "750", "750ml", "0.75L") 하나를 ml로 정규화 */
+function normalizeQueryVolume(volume: string): number | null {
+  const found = extractVolumesMl(volume);
+  return found.length > 0 ? found[0] : null;
+}
+
 /**
  * 쿼리와 유사한 상품명 후보 추출 + matchRate 계산
  *
@@ -63,8 +86,11 @@ interface ScoredName {
  *  2. 유의어 정규화 후 포함 여부
  *  3. 원본 토큰 각각의 부분 매칭 (fallback)
  *  4. 역방향: 상품명 토큰이 쿼리에 포함되는지
+ *  5. 용량(volume)이 주어지면: 상품명에 같은 용량이 있으면 가산점, 다른 용량이 명시돼 있으면 감점
+ *     (대부분의 상위상품명에는 용량이 없으므로 그 경우는 가/감점 없음)
  */
-export function searchWithScores(query: string, names: string[]): ScoredName[] {
+export function searchWithScores(query: string, names: string[], volume?: string): ScoredName[] {
+  const queryVolumeMl = volume ? normalizeQueryVolume(volume) : null;
   // 쿼리에 &가 없으면, &가 포함된 상품명은 후순위 처리
   const queryHasAmpersand = query.includes('&');
 
@@ -131,6 +157,17 @@ export function searchWithScores(query: string, names: string[]): ScoredName[] {
     const ampersandPenalty = !queryHasAmpersand && name.includes('&');
     if (ampersandPenalty) score = Math.max(0, score - 80);
 
+    // ── 5. 용량 가/감점 (상품명에 용량이 명시된 경우에만 적용) ─────
+    let volumeBonus = 0;
+    if (queryVolumeMl !== null) {
+      const nameVolumesMl = extractVolumesMl(name);
+      if (nameVolumesMl.length > 0) {
+        const hasMatch = nameVolumesMl.some((v) => Math.abs(v - queryVolumeMl) < 0.01);
+        volumeBonus = hasMatch ? 60 : -60;
+        score = Math.max(0, score + volumeBonus);
+      }
+    }
+
     // ── matchRate 계산 (0~100) ───────────────────────────────────
     let matchRate = 0;
     if (score > 0) {
@@ -155,6 +192,8 @@ export function searchWithScores(query: string, names: string[]): ScoredName[] {
       matchRate = Math.min(100, Math.max(0, matchRate));
       // & 패널티를 matchRate에도 반영 (최종 정렬 기준)
       if (ampersandPenalty) matchRate = Math.max(0, matchRate - 30);
+      // 용량 가/감점을 matchRate에도 반영
+      if (volumeBonus !== 0) matchRate = Math.min(100, Math.max(0, matchRate + volumeBonus / 2));
     }
 
     return { name, score, matchRate };

@@ -3,13 +3,13 @@ import { loadProductNames, searchWithScores } from '@/lib/productRef';
 
 export async function POST(req: NextRequest) {
   try {
-    const { productName } = await req.json();
+    const { productName, volume } = await req.json();
     if (!productName || typeof productName !== 'string') {
       return NextResponse.json({ error: 'productName required' }, { status: 400 });
     }
 
     const allNames = loadProductNames();
-    const results = searchWithScores(productName, allNames);
+    const results = searchWithScores(productName, allNames, typeof volume === 'string' ? volume : undefined);
 
     // 상위 5개, matchRate 내림차순
     const candidates = results
