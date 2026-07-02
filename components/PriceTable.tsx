@@ -10,6 +10,7 @@ import {
   calcRecommendedPrice,
   calcAppPrice,
 } from '@/lib/priceCalc';
+import SalesChartModal from '@/components/SalesChartModal';
 
 interface Props {
   products: RefinedProduct[];
@@ -100,6 +101,7 @@ export default function PriceTable({ products, initialRows, onRowsChange, onDele
     return m;
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [chartModalName, setChartModalName] = useState<string | null>(null);
   // 세션 로드 시: rateLimited가 아닌 행은 이미 있으므로 fetch 생략
   const fetchedNamesRef = useRef<Set<string>>(new Set(
     (initialRows ?? []).filter(r => !r.rateLimited).map(r => r.productName)
@@ -355,6 +357,7 @@ export default function PriceTable({ products, initialRows, onRowsChange, onDele
   if (rows.length === 0) return null;
 
   return (
+    <>
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-gray-800">가격표</h2>
@@ -402,7 +405,18 @@ export default function PriceTable({ products, initialRows, onRowsChange, onDele
               const input = inputs[row.productName] ?? { supplyPrice: String(row.supplyPrice), margin: String(row.wholesaleMargin), appPrice: String(row.appPrice) };
               return (
                 <tr key={`${row.productName}_${idx}`} className="border-b border-gray-50 hover:bg-gray-50">
-                  <td className="py-3 px-3 font-medium text-gray-800">{row.productName}</td>
+                  <td className="py-3 px-3 font-medium text-gray-800">
+                    {row.salesStats && !row.salesStats.noData ? (
+                      <button
+                        onClick={() => setChartModalName(row.productName)}
+                        className="text-blue-600 hover:underline text-left"
+                      >
+                        {row.productName}
+                      </button>
+                    ) : (
+                      row.productName
+                    )}
+                  </td>
                   {/* 공급가 */}
                   <td className="py-3 px-3">
                     <input
@@ -491,5 +505,9 @@ export default function PriceTable({ products, initialRows, onRowsChange, onDele
         </table>
       </div>
     </div>
+    {chartModalName && (
+      <SalesChartModal name={chartModalName} onClose={() => setChartModalName(null)} />
+    )}
+    </>
   );
 }
