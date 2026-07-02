@@ -35,6 +35,20 @@ export function loadProductNames(): string[] {
     .filter(Boolean);
 }
 
+/** 상품명 → 상위상품 id 매핑 (name, id 컬럼) */
+export function loadProductIdMap(): Record<string, string> {
+  if (!fs.existsSync(CSV_PATH)) return {};
+  const raw = fs.readFileSync(CSV_PATH, 'utf-8');
+  const result = Papa.parse<Record<string, string>>(raw, { header: true, skipEmptyLines: true });
+  const map: Record<string, string> = {};
+  for (const row of result.data) {
+    const name = (row['name'] || '').trim();
+    const id = (row['id'] || '').trim();
+    if (name && id) map[name] = id;
+  }
+  return map;
+}
+
 interface ScoredName {
   name: string;
   score: number;

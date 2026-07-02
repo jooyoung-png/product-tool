@@ -272,13 +272,27 @@ export default function PriceTable({ products, initialRows, onRowsChange, onDele
     );
   }
 
-  const handleExportBulkRegister = () => {
+  const handleExportBulkRegister = async () => {
+    let idMap: Record<string, string> = {};
+    try {
+      const res = await fetch('/api/product-ref-ids', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ names: rows.map(r => r.productName) }),
+      });
+      const data = await res.json();
+      idMap = data.ids ?? {};
+    } catch (err) {
+      console.error('상위상품 id 조회 실패:', err);
+    }
+
     const headers = [
-      '상위 상품명', '쇼핑백 제공 유형', '수입제조사', '용도', '용량',
+      '상위상품 id', '상위 상품명', '쇼핑백 제공 유형', '수입제조사', '용도', '용량',
       '공급가', '도매 마진율', '판매가', '신규 오픈일', '박스 내 병 단위',
       'Distribution', 'Code', '상태', 'Maximum',
     ];
     const csvRows = rows.map(row => [
+      idMap[row.productName] ?? '',    // 상위상품 id
       row.productName,                // 상위 상품명 = 정제된 상품명
       '',                              // 쇼핑백 제공 유형 = 공란
       '',                              // 수입제조사 = 공란
