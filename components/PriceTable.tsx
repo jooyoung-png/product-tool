@@ -102,6 +102,7 @@ export default function PriceTable({ products, initialRows, onRowsChange, onDele
   });
   const [isLoading, setIsLoading] = useState(false);
   const [chartModalName, setChartModalName] = useState<string | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
   // 세션 로드 시: rateLimited가 아닌 행은 이미 있으므로 fetch 생략
   const fetchedNamesRef = useRef<Set<string>>(new Set(
     (initialRows ?? []).filter(r => !r.rateLimited).map(r => r.productName)
@@ -363,6 +364,12 @@ export default function PriceTable({ products, initialRows, onRowsChange, onDele
         <h2 className="text-lg font-semibold text-gray-800">가격표</h2>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowDetails((v) => !v)}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
+          >
+            {showDetails ? '간단히 보기' : '자세히 보기'}
+          </button>
+          <button
             onClick={handleExportBulkRegister}
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors"
           >
@@ -390,12 +397,16 @@ export default function PriceTable({ products, initialRows, onRowsChange, onDele
               <th className="text-left py-2 px-3 text-gray-500 font-medium min-w-[180px]">상품명</th>
               <th className="text-center py-2 px-3 text-gray-500 font-medium min-w-[120px]">공급가</th>
               <th className="text-center py-2 px-3 text-gray-500 font-medium min-w-[100px]">도매수익률</th>
-              <th className="text-right py-2 px-3 text-gray-500 font-medium">도매판매가</th>
-              <th className="text-right py-2 px-3 text-gray-500 font-medium">매장 순수익</th>
-              <th className="text-right py-2 px-3 text-gray-500 font-medium">DS수수료</th>
+              {showDetails && (
+                <>
+                  <th className="text-right py-2 px-3 text-gray-500 font-medium">도매판매가</th>
+                  <th className="text-right py-2 px-3 text-gray-500 font-medium">매장 순수익</th>
+                  <th className="text-right py-2 px-3 text-gray-500 font-medium">DS수수료</th>
+                </>
+              )}
               <th className="text-right py-2 px-3 text-gray-500 font-medium">DS수수료율</th>
-              <th className="text-right py-2 px-3 text-gray-500 font-medium">앱 추천가</th>
               <th className="text-center py-2 px-3 text-gray-500 font-medium min-w-[130px]">앱 판매가</th>
+              <th className="text-right py-2 px-3 text-gray-500 font-medium">앱 추천가</th>
               <th className="text-center py-2 px-3 text-gray-500 font-medium">가격비교</th>
               <th className="py-2 px-2 w-8" />
             </tr>
@@ -443,9 +454,13 @@ export default function PriceTable({ products, initialRows, onRowsChange, onDele
                     </div>
                   </td>
 
-                  <td className="py-3 px-3 text-right text-gray-700">{fmt(Math.round(row.wholesalePrice))}</td>
-                  <td className="py-3 px-3 text-right text-gray-700">{fmt(row.storeProfit)}</td>
-                  <td className="py-3 px-3 text-right text-gray-700">{fmt(Math.round(row.dailyshotFee))}</td>
+                  {showDetails && (
+                    <>
+                      <td className="py-3 px-3 text-right text-gray-700">{fmt(Math.round(row.wholesalePrice))}</td>
+                      <td className="py-3 px-3 text-right text-gray-700">{fmt(row.storeProfit)}</td>
+                      <td className="py-3 px-3 text-right text-gray-700">{fmt(Math.round(row.dailyshotFee))}</td>
+                    </>
+                  )}
                   <td className={`py-3 px-3 text-right font-medium ${
                     row.dailyshotFeeRate > 0.133
                       ? 'text-red-500'
@@ -456,15 +471,6 @@ export default function PriceTable({ products, initialRows, onRowsChange, onDele
                     {fmtRate(row.dailyshotFeeRate)}
                   </td>
 
-                  <td className="py-3 px-3 text-right text-gray-700">
-                    {row.recommendedPrice === '데이터 없음'
-                      ? row.rateLimited
-                        ? <span className="text-amber-400 text-xs">조회 대기중</span>
-                        : <span className="text-gray-400">데이터 없음</span>
-                      : <span>{fmt(row.recommendedPrice as number)}</span>
-                    }
-                  </td>
-
                   {/* 앱 판매가 */}
                   <td className="py-3 px-3">
                     <input
@@ -473,6 +479,16 @@ export default function PriceTable({ products, initialRows, onRowsChange, onDele
                       onChange={(e) => handleAppPriceChange(row.productName, e.target.value)}
                       className="w-28 border border-gray-200 rounded-lg px-2 py-1 text-right text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
+                  </td>
+
+                  {/* 앱 추천가 */}
+                  <td className="py-3 px-3 text-right text-gray-700">
+                    {row.recommendedPrice === '데이터 없음'
+                      ? row.rateLimited
+                        ? <span className="text-amber-400 text-xs">조회 대기중</span>
+                        : <span className="text-gray-400">데이터 없음</span>
+                      : <span>{fmt(row.recommendedPrice as number)}</span>
+                    }
                   </td>
 
                   {/* 가격비교 */}
