@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
-import { saveMeta } from '@/lib/productRef';
+import { saveMeta, invalidateProductNamesCache } from '@/lib/productRef';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const CSV_PATH = path.join(DATA_DIR, 'products.csv');
@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
     const updatedAt = dateMatch ? dateMatch[1] : new Date().toISOString().split('T')[0];
 
     saveMeta({ updatedAt, originalName: file.name });
+    invalidateProductNamesCache();
 
     return NextResponse.json({ ok: true, updatedAt, originalName: file.name });
   } catch (err) {

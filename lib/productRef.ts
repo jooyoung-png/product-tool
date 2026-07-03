@@ -7,6 +7,28 @@ const DATA_DIR = path.join(process.cwd(), 'data');
 const CSV_PATH = path.join(DATA_DIR, 'products.csv');
 const META_PATH = path.join(DATA_DIR, 'meta.json');
 
+/** 상품명별 정규화 결과 캐시 (검색마다 재계산하지 않도록) */
+interface NameEntry {
+  normName: string;
+  synName: string;
+  tokens: { normNt: string; synNt: string }[];
+}
+const _nameEntryCache = new Map<string, NameEntry>();
+
+function getNameEntry(name: string): NameEntry {
+  let entry = _nameEntryCache.get(name);
+  if (!entry) {
+    const nameTokens = name.split(/\s+/).filter((t) => t.length >= 1);
+    entry = {
+      normName: normalize(name),
+      synName: normalizeWithSynonyms(name),
+      tokens: nameTokens.map((nt) => ({ normNt: normalize(nt), synNt: normalizeWithSynonyms(nt) })),
+    };
+    _nameEntryCache.set(name, entry);
+  }
+  return entry;
+}
+
 export interface ProductRefMeta {
   updatedAt: string; // YYYY-MM-DD
   originalName: string;
@@ -25,14 +47,24 @@ export function saveMeta(meta: ProductRefMeta) {
   fs.writeFileSync(META_PATH, JSON.stringify(meta, null, 2), 'utf-8');
 }
 
-/** 상품명 리스트 로드 (name 컬럼) */
+let _namesCache: string[] | null = null;
+
+/** products.csv가 갱신된 뒤(업로드 등) 호출해 검색 캐시를 무효화 */
+export function invalidateProductNamesCache() {
+  _namesCache = null;
+  _nameEntryCache.clear();
+}
+
+/** 상품명 리스트 로드 (name 컬럼) — 프로세스 생애주기 동안 캐싱 */
 export function loadProductNames(): string[] {
+  if (_namesCache) return _namesCache;
   if (!fs.existsSync(CSV_PATH)) return [];
   const raw = fs.readFileSync(CSV_PATH, 'utf-8');
   const result = Papa.parse<Record<string, string>>(raw, { header: true, skipEmptyLines: true });
-  return result.data
+  _namesCache = result.data
     .map((row) => (row['name'] || '').trim())
     .filter(Boolean);
+  return _namesCache;
 }
 
 /** 상품명 → 상위상품 id 매핑 (name, id 컬럼) */
@@ -97,16 +129,20 @@ export function searchWithScores(query: string, names: string[], volume?: string
   const normQuery = normalize(query);
   const synQuery = normalizeWithSynonyms(query);
 
-  // 원본 토큰 (공백 분리)
+  // 원본 토큰 (공백 분리) — 쿼리에만 의존하므로 루프 밖에서 한 번만 정규화
   const queryTokens = query
     .replace(/[^\wㄱ-힣a-zA-Z0-9\s]/g, ' ')
     .split(/\s+/)
     .filter((t) => t.length >= 1)
     .map((t) => t.toLowerCase());
+  const queryTokensNorm = queryTokens.map((token) => ({
+    token,
+    normToken: normalize(token),
+    synToken: normalizeWithSynonyms(token),
+  }));
 
   const scored = names.map((name) => {
-    const normName = normalize(name);
-    const synName = normalizeWithSynonyms(name);
+    const { normName, synName, tokens: nameTokens } = getNameEntry(name);
 
     let score = 0;
 
@@ -131,9 +167,7 @@ export function searchWithScores(query: string, names: string[], volume?: string
 
     // ── 3. 토큰별 매칭 (공백 분리 쿼리 대응) ────────────────────
     let tokenMatchCount = 0;
-    for (const token of queryTokens) {
-      const normToken = normalize(token);
-      const synToken = normalizeWithSynonyms(token);
+    for (const { normToken, synToken } of queryTokensNorm) {
       if (
         normName.includes(normToken) ||
         synName.includes(synToken)
@@ -144,10 +178,7 @@ export function searchWithScores(query: string, names: string[], volume?: string
     }
 
     // ── 4. 역방향: 상품명의 각 토큰이 쿼리에 포함되는지 ─────────
-    const nameTokens = name.split(/\s+/).filter((t) => t.length >= 1);
-    for (const nt of nameTokens) {
-      const normNt = normalize(nt);
-      const synNt = normalizeWithSynonyms(nt);
+    for (const { normNt, synNt } of nameTokens) {
       if (normNt.length >= 2 && (normQuery.includes(normNt) || synQuery.includes(synNt))) {
         score += normNt.length * 2;
       }
