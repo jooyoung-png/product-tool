@@ -68,11 +68,11 @@ export default function Home() {
     setLoading(false);
   };
 
-  const handleRetryConfirm = useCallback((refined: RefinedProduct[]) => {
+  const handleRetryConfirm = useCallback((originalName: string, refined: RefinedProduct[]) => {
     const retried = refined[0];
     setRefinedProducts((prev) =>
       prev.map(p =>
-        p.originalName === retried.originalName && !p.finalName ? retried : p
+        p.originalName === originalName && !p.finalName ? retried : p
       )
     );
     setRetryProduct(null);
@@ -188,7 +188,15 @@ export default function Home() {
                         <span className="w-1.5 h-1.5 rounded-full bg-gray-300 inline-block" />
                         <button
                           className="text-blue-500 hover:underline"
-                          onClick={() => setRetryProduct({ name: p.originalName, supplyPrice: p.supplyPrice })}
+                          onClick={() => setRetryProduct({
+                            name: p.originalName,
+                            supplyPrice: p.supplyPrice,
+                            bottlesPerBox: p.bottlesPerBox,
+                            purpose: p.purpose,
+                            stock: p.stock,
+                            code: p.code,
+                            volume: p.volume,
+                          })}
                         >
                           {p.originalName}
                         </button>
@@ -216,7 +224,7 @@ export default function Home() {
       {retryProduct && (
         <RefineModal
           products={[retryProduct]}
-          onConfirm={handleRetryConfirm}
+          onConfirm={(refined) => handleRetryConfirm(retryProduct.name, refined)}
           onClose={() => setRetryProduct(null)}
         />
       )}
